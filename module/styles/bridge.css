@@ -1,0 +1,9 @@
+.fvttmb-connect { display: flex; flex-direction: column; gap: 0.5rem; }
+.fvttmb-connect .fvttmb-hint { margin: 0 0 0.25rem; opacity: 0.85; }
+.fvttmb-connect .fvttmb-qr { display: flex; justify-content: center; padding: 0.5rem; }
+.fvttmb-connect .fvttmb-qr svg { border: 4px solid #fff; border-radius: 6px; }
+.fvttmb-connect label { font-weight: 600; font-size: 0.85rem; }
+.fvttmb-connect .fvttmb-row { display: flex; gap: 0.25rem; }
+.fvttmb-connect .fvttmb-row input { flex: 1 1 auto; font-family: monospace; font-size: 0.8rem; }
+.fvttmb-connect .fvttmb-row button { flex: 0 0 2.2rem; }
+.fvttmb-connect .fvttmb-note { font-size: 0.8rem; opacity: 0.75; margin: 0.35rem 0 0; }

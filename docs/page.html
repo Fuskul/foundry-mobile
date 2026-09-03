@@ -1,0 +1,455 @@
+<title>Foundry Mobile</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #eceef1;
+    --surface: #ffffff;
+    --surface-2: #f5f6f8;
+    --ink: #16181c;
+    --ink-2: #464d58;
+    --muted: #6d7683;
+    --line: #d2d7de;
+    --line-soft: #e3e7ec;
+    --accent: #9a6a1e;
+    --accent-soft: #f1e5cf;
+    --ok: #2f6b45;
+    --ok-soft: #dfeee4;
+    --warn: #9c3a2b;
+    --warn-soft: #f6e2de;
+    --shadow: 0 1px 2px rgba(20, 24, 30, .06), 0 8px 24px -18px rgba(20, 24, 30, .5);
+
+    --display: "Zilla Slab", Georgia, "Times New Roman", serif;
+    --body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101216;
+      --surface: #191c21;
+      --surface-2: #202429;
+      --ink: #e7eaef;
+      --ink-2: #b4bcc7;
+      --muted: #8b95a2;
+      --line: #2c313a;
+      --line-soft: #242931;
+      --accent: #d19f4d;
+      --accent-soft: #33291a;
+      --ok: #7fbf94;
+      --ok-soft: #1d2b23;
+      --warn: #e08878;
+      --warn-soft: #2e1e1b;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -20px rgba(0, 0, 0, .9);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #101216;
+    --surface: #191c21;
+    --surface-2: #202429;
+    --ink: #e7eaef;
+    --ink-2: #b4bcc7;
+    --muted: #8b95a2;
+    --line: #2c313a;
+    --line-soft: #242931;
+    --accent: #d19f4d;
+    --accent-soft: #33291a;
+    --ok: #7fbf94;
+    --ok-soft: #1d2b23;
+    --warn: #e08878;
+    --warn-soft: #2e1e1b;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -20px rgba(0, 0, 0, .9);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 860px; margin: 0 auto; padding: 2.4rem 1.25rem 5rem; }
+
+  header.masthead {
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+    padding-bottom: 1.6rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .74rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(2.3rem, 7vw, 3.3rem);
+    line-height: 1.02;
+    letter-spacing: -.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    margin: 0;
+    max-width: 62ch;
+    font-size: 1.06rem;
+    color: var(--ink-2);
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .3rem; }
+  .chip {
+    display: inline-flex; align-items: center; gap: .4rem;
+    font-family: var(--mono); font-size: .74rem;
+    padding: .28rem .6rem; border-radius: 3px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink-2);
+  }
+  .chip b { font-weight: 500; }
+  .chip.done { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+  .chip.todo { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+
+  section { margin-top: 3rem; }
+  h2 {
+    font-family: var(--display);
+    font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0 0 .2rem;
+    text-wrap: balance;
+  }
+  h2 + .lede { margin: 0 0 1.2rem; color: var(--muted); max-width: 62ch; }
+  h3 {
+    font-family: var(--display);
+    font-size: 1.06rem;
+    font-weight: 600;
+    margin: 1.6rem 0 .4rem;
+  }
+  p { max-width: 66ch; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+
+  .split { display: grid; gap: .9rem; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 640px) { .split { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+    box-shadow: var(--shadow);
+  }
+  .panel h3 { margin-top: 0; }
+  .panel p { margin: 0; color: var(--ink-2); font-size: .95rem; }
+  .panel .path {
+    font-family: var(--mono); font-size: .78rem; color: var(--accent);
+    display: block; margin-bottom: .35rem;
+  }
+
+  ol.steps { list-style: none; counter-reset: step; margin: 0; padding: 0; }
+  ol.steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 1.15rem 2.6rem;
+    border-left: 1px solid var(--line);
+    margin-left: .9rem;
+  }
+  ol.steps > li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.steps > li::before {
+    content: counter(step, decimal-leading-zero);
+    position: absolute; left: -.9rem; top: -.15rem;
+    width: 1.8rem; height: 1.8rem;
+    display: grid; place-items: center;
+    background: var(--surface); color: var(--accent);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    font-family: var(--mono); font-size: .7rem;
+  }
+  ol.steps > li.is-done::before {
+    content: "✓"; background: var(--ok-soft); color: var(--ok); border-color: transparent;
+  }
+  ol.steps h3 { margin: 0 0 .15rem; font-size: 1rem; }
+  ol.steps p { margin: 0; color: var(--ink-2); font-size: .95rem; }
+
+  ul.plain { padding-left: 1.1rem; margin: .4rem 0; }
+  ul.plain li { margin-bottom: .3rem; color: var(--ink-2); max-width: 64ch; }
+
+  code, .k {
+    font-family: var(--mono); font-size: .84em;
+    background: var(--surface-2); border: 1px solid var(--line-soft);
+    padding: .08em .34em; border-radius: 3px;
+  }
+
+  .scroller { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 6px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  th, td { text-align: left; padding: .6rem .8rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th {
+    font-family: var(--mono); font-weight: 500; font-size: .72rem;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+    background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.mono { font-family: var(--mono); font-size: .82rem; color: var(--accent); white-space: nowrap; }
+
+  figure { margin: 1.2rem 0 0; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { font-size: .82rem; color: var(--muted); margin-top: .5rem; font-family: var(--mono); }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    padding: .85rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1.2rem 0;
+  }
+  .callout p { margin: 0; font-size: .95rem; color: var(--ink-2); }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout strong { color: var(--ink); }
+
+  .card-demo {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: .85rem 1rem;
+    font-size: .9rem;
+    box-shadow: var(--shadow);
+  }
+  .card-demo .row { display: flex; justify-content: space-between; gap: 1rem; padding: .22rem 0; }
+  .card-demo .row + .row { border-top: 1px dashed var(--line-soft); }
+  .card-demo .label { color: var(--muted); font-size: .82rem; }
+  .card-demo .val { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .card-demo .val.good { color: var(--ok); }
+  .card-demo .title { font-family: var(--display); font-weight: 600; margin-bottom: .3rem; }
+
+  footer { margin-top: 3.5rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .86rem; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Foundry VTT · WFRP 4e · Android</div>
+    <h1>Foundry Mobile</h1>
+    <p class="standfirst">
+      Мобильный спутник для ваших игр в Foundry: лист персонажа, настоящие броски системы
+      и чат — с телефона. Состоит из модуля для Foundry и приложения. Интерфейс на русском
+      и английском, WFRP4e сейчас, другие системы — через адаптеры.
+    </p>
+    <div class="chips">
+      <span class="chip done"><b>Модуль-мост</b> написан и установлен</span>
+      <span class="chip done"><b>Приложение</b> собрано, RU/EN</span>
+      <span class="chip todo"><b>APK</b> — нужен репозиторий на GitHub</span>
+      <span class="chip todo"><b>Проверка на живой игре</b> — следующий шаг</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Из чего это состоит</h2>
+    <p class="lede">Две части, одна сборка интерфейса используется дважды.</p>
+    <div class="split">
+      <div class="panel">
+        <span class="path">Data/modules/fvtt-mobile-bridge</span>
+        <h3>Модуль для Foundry</h3>
+        <p>
+          Готовит данные листа и кидает кубы настоящим движком WFRP4e. Уже лежит
+          в вашей папке модулей — осталось перезапустить Foundry и включить его в мире.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="path">app/ → APK и веб-версия</span>
+        <h3>Приложение</h3>
+        <p>
+          React + Capacitor. Один и тот же интерфейс Foundry раздаёт по адресу
+          <code>/modules/fvtt-mobile-bridge/app/</code> — то есть телефон можно проверить
+          прямо сейчас, до всякой сборки APK.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Почему без модуля не обойтись</h2>
+    <p>
+      Телефон умеет войти в Foundry и прочитать документы напрямую — но сырой документ
+      это ещё не лист персонажа. Итог навыка, очки брони, максимум ран и вся механика
+      проверки (УУ, криты, промахи, локация попадания, Преимущество, эффекты талантов)
+      считаются кодом системы, который живёт только внутри клиента Foundry.
+    </p>
+    <p>
+      Поэтому приложение не переписывает правила заново. Оно просит модуль в браузере
+      Мастера подготовить лист и бросить кубы — и в чат падает обычная карточка WFRP4e,
+      неотличимая от броска с компьютера.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 820 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Схема: телефон входит на сервер Foundry, сервер пересылает запрос браузеру Мастера, модуль выполняет бросок системы, карточка возвращается в общий чат">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.5" color="var(--line)">
+          <rect x="14" y="86" width="180" height="78" rx="6" fill="var(--surface)"/>
+          <rect x="320" y="20" width="180" height="78" rx="6" fill="var(--surface)"/>
+          <rect x="320" y="152" width="180" height="78" rx="6" fill="var(--surface)"/>
+          <rect x="626" y="86" width="180" height="78" rx="6" fill="var(--surface)"/>
+        </g>
+
+        <g font-family="Zilla Slab, Georgia, serif" font-size="16" font-weight="600" fill="var(--ink)">
+          <text x="104" y="120" text-anchor="middle">Телефон</text>
+          <text x="410" y="54" text-anchor="middle">Сервер Foundry</text>
+          <text x="410" y="186" text-anchor="middle">Браузер Мастера</text>
+          <text x="716" y="120" text-anchor="middle">Общий чат</text>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">
+          <text x="104" y="140" text-anchor="middle">приложение / веб</text>
+          <text x="410" y="74" text-anchor="middle">POST /join · socket.io</text>
+          <text x="410" y="206" text-anchor="middle">модуль-мост + WFRP4e</text>
+          <text x="716" y="140" text-anchor="middle">карточка броска</text>
+        </g>
+
+        <g stroke="var(--accent)" stroke-width="1.8" fill="none" color="var(--accent)" marker-end="url(#ar)">
+          <path d="M196 108 L 312 62"/>
+          <path d="M410 100 L 410 146"/>
+          <path d="M502 192 L 618 138"/>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">
+          <text x="212" y="78">1 · вход и запрос</text>
+          <text x="422" y="128">2 · пересылка</text>
+          <text x="508" y="228">3 · setupSkill() → roll()</text>
+        </g>
+      </svg>
+      <figcaption>Один клиент на запрос: выбирается детерминированно — активный ГМ, иначе владелец персонажа.</figcaption>
+    </figure>
+
+    <div class="callout warn">
+      <p>
+        <strong>Отсюда главное ограничение:</strong> хотя бы один обычный клиент Foundry
+        (обычно Мастер) должен быть в игре. Иначе приложение честно скажет
+        «модуль-мост не найден» и лист не откроется.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Что делать дальше</h2>
+    <p class="lede">Первый шаг я уже сделал за вас.</p>
+    <ol class="steps">
+      <li class="is-done">
+        <h3>Модуль положен в папку</h3>
+        <p><code>G:\foundry13_data\Data\modules\fvtt-mobile-bridge\</code> — файлы на месте.</p>
+      </li>
+      <li>
+        <h3>Перезапустить Foundry</h3>
+        <p>Новые модули сервер видит только при старте. Затем в мире: «Управление модулями» → включить <strong>Mobile Bridge</strong> → перезагрузить мир.</p>
+      </li>
+      <li>
+        <h3>Открыть QR-код</h3>
+        <p>Значок телефона в панели инструментов слева, либо «Настройки» → «Мобильное приложение». Отсканируйте код телефоном — откроется веб-версия.</p>
+      </li>
+      <li>
+        <h3>Войти и проверить бросок</h3>
+        <p>Адрес сервера → выбрать игрока → пароль. Тапните характеристику, поставьте модификатор и киньте. Карточка должна появиться в общем чате Foundry.</p>
+      </li>
+      <li>
+        <h3>Прислать мне журнал</h3>
+        <p>В приложении «Ещё» → «Скопировать журнал». Там вся диагностика подключения: по ней я починю то, что не заработает с первого раза.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Что приложение уже умеет</h2>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Экран</th><th>Содержимое</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">Главное</td><td>Характеристики с тапом на бросок, раны и Преимущество с «+ / −», Судьба, Удача, Стойкость, Решимость, Порча, Грех, броня по локациям, состояния, движение, нагрузка, опыт</td></tr>
+          <tr><td class="mono">Навыки</td><td>Базовые и продвинутые с поиском, итог каждого навыка, тап — проверка</td></tr>
+          <tr><td class="mono">Бой</td><td>Оружие с уроном, досягаемостью, качествами и изъянами; атака в один тап; доспехи; рулевые черты; ранения и хвори</td></tr>
+          <tr><td class="mono">Таланты</td><td>Список с числом продвижений и раскрывающимся описанием</td></tr>
+          <tr><td class="mono">Магия</td><td>Заклинания — «наколдовать» и «направить» отдельными кнопками; молитвы</td></tr>
+          <tr><td class="mono">Вещи</td><td>Деньги, снаряжение, вес</td></tr>
+          <tr><td class="mono">Кубы</td><td>Быстрые броски характеристик и своя формула (<code>1d100</code>, <code>2d10+3</code>)</td></tr>
+          <tr><td class="mono">Чат</td><td>Живая лента сообщений игры и отправка своих</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Окно броска</h3>
+    <p>
+      Перед броском можно выставить модификатор (пресеты −30…+30), сложность, бонус УУ
+      и бонус успехов, а также видимость броска. Результат показывается прямо в приложении:
+    </p>
+    <div class="card-demo">
+      <div class="title">Ближний бой (Основы) — Меч</div>
+      <div class="row"><span class="label">Бросок</span><span class="val">37</span></div>
+      <div class="row"><span class="label">Цель</span><span class="val">55</span></div>
+      <div class="row"><span class="label">Степень успеха</span><span class="val good">+2</span></div>
+      <div class="row"><span class="label">Локация</span><span class="val">левая рука</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Честно о рисках</h2>
+    <ul class="plain">
+      <li><strong>Версия 0.1 ещё не проверялась на живом сервере.</strong> Протокол входа и подключения написан по тому, как это делает сам веб-клиент Foundry 13, но первую отладку придётся пройти вместе — для того в приложении и есть журнал.</li>
+      <li><strong>Нужен онлайн-Мастер.</strong> Без браузерного клиента с модулем лист не соберётся. Со временем часть данных можно будет читать напрямую, но броски всегда останутся за модулем.</li>
+      <li><strong>Доверие к отправителю.</strong> Foundry пересылает события модулей без подписи, поэтому мост верит полю «от кого». Права на персонажа проверяются, но для публичного релиза сюда нужно добавить подпись запроса.</li>
+      <li><strong>Карты пока нет.</strong> Сцены, токены и перемещение — отдельная большая задача, в 0.1 её нет сознательно.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Дорожная карта</h2>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Этап</th><th>Что делаем</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">0.1</td><td>Модуль, лист WFRP4e, броски, чат, RU/EN — готово, ждёт проверки</td></tr>
+          <tr><td class="mono">0.2</td><td>Отладка на вашей игре, APK через GitHub Actions, иконка и название</td></tr>
+          <tr><td class="mono">0.3</td><td>Трекер инициативы, цели, оппозиционные проверки, расширенные проверки</td></tr>
+          <tr><td class="mono">0.4</td><td>Подпись запросов, работа без Мастера в сети для чтения листа</td></tr>
+          <tr><td class="mono">0.5</td><td>Второй адаптер системы (D&amp;D 5e или Wrath &amp; Glory) для проверки расширяемости</td></tr>
+          <tr><td class="mono">1.0</td><td>Публикация: релизы модуля, страница в каталоге Foundry, сборка для Google Play</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Как получится APK</h2>
+    <p>
+      Android Studio ставить не нужно. Проект собирается в облаке GitHub: вы создаёте
+      репозиторий, я кладу туда код, и при каждом изменении GitHub сам собирает
+      <code>foundry-mobile-debug.apk</code> — его останется скачать и поставить на телефон.
+      Для публичного релиза тот же процесс выкладывает и приложение, и архив модуля.
+    </p>
+    <div class="callout">
+      <p>
+        До этого момента ничего не мешает пользоваться веб-версией с телефона — это
+        буквально то же приложение, просто открытое в браузере.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    Foundry Mobile 0.1.0 · модуль <span class="k">fvtt-mobile-bridge</span> ·
+    Foundry VTT 13, WFRP4e 9.6.4 · лицензия MIT
+  </footer>
+
+</div>
