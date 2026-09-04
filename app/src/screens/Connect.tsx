@@ -1,7 +1,7 @@
 import React from "react";
 import { useStore } from "../store";
 import { useT, Field, Card } from "../ui/common";
-import { LANGS } from "../i18n";
+import { LANGS, translateError } from "../i18n";
 import { Diagnostics } from "../ui/Diagnostics";
 
 export function Connect() {
@@ -25,7 +25,7 @@ export function Connect() {
           </select>
         </div>
 
-        {s.error ? <div className="error">{s.error}</div> : null}
+        {s.error ? <div className="error">{translateError(s.lang, s.error)}</div> : null}
 
         <Field label={t("connect.server")} hint={t("connect.serverHint")}>
           <input
@@ -58,16 +58,15 @@ export function Connect() {
 
       {s.probed ? (
         <Card>
-          <Field label={t("connect.user")} hint={t("connect.userHint")}>
-            <input
-              value={s.username}
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder={t("connect.userPlaceholder")}
-              onChange={event => s.setField("username", event.target.value)}
-              onKeyDown={event => { if (event.key === "Enter" && s.username) void s.login(); }}
-            />
+          <Field label={t("connect.user")}>
+            {s.users.length ? (
+              <select value={s.userId} onChange={event => s.setField("userId", event.target.value)}>
+                <option value="">{t("connect.selectUser")}</option>
+                {s.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            ) : (
+              <div className="error" style={{ margin: 0 }}>{t("connect.noUsers")}</div>
+            )}
           </Field>
 
           <Field label={t("connect.password")} hint={t("connect.passwordHint")}>
@@ -75,7 +74,7 @@ export function Connect() {
               type="password"
               value={s.password}
               onChange={event => s.setField("password", event.target.value)}
-              onKeyDown={event => { if (event.key === "Enter" && s.username) void s.login(); }}
+              onKeyDown={event => { if (event.key === "Enter" && s.userId) void s.login(); }}
             />
           </Field>
 
@@ -91,7 +90,7 @@ export function Connect() {
 
           <button
             className="btn primary block"
-            disabled={!s.username.trim() || s.busy === "login"}
+            disabled={!s.userId || s.busy === "login"}
             onClick={() => void s.login()}
           >
             {s.busy === "login" ? t("connect.loggingIn") : t("connect.login")}

@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { CapacitorHttp } from "@capacitor/core";
+import { CapacitorHttp, CapacitorCookies } from "@capacitor/core";
 
 export interface HttpResponse {
   status: number;
@@ -81,6 +81,16 @@ export function defaultBase(): string {
     const at = pathname.indexOf(marker);
     if (at < 0) return "";
     return `${origin}${pathname.slice(0, at)}`;
+  } catch {
+    return "";
+  }
+}
+
+/** Read a cookie from the native jar; the WebView cannot see another host's cookies. */
+export async function readCookie(url: string, name: string): Promise<string> {
+  try {
+    const jar: Record<string, string> = await CapacitorCookies.getCookies({ url } as any);
+    return jar?.[name] ?? "";
   } catch {
     return "";
   }

@@ -31,10 +31,27 @@ export const HANDLERS = {
     return safe(getAdapter().config());
   },
 
-  /** Actors the requesting user may open on their phone. */
-  async actors({ user }) {
-    return game.actors
-      .filter(a => canUseActor(user, a))
+  /**
+   * Actors the requesting user may open on their phone.
+   * A GM can see every actor in the world, which on a large world is thousands
+   * of entries, so the default scope is "the ones that are actually mine".
+   */
+  async actors({ payload, user }) {
+    const scope = payload?.scope ?? "mine";
+    const query = String(payload?.query ?? "").trim().toLowerCase();
+
+    let list = game.actors.filter(a => canUseActor(user, a));
+
+    if (scope === "mine") {
+      const mine = list.filter(a => user.character?.id === a.id || ownsExplicitly(a, user));
+      list = mine.length ? mine : list.filter(a => a.type === "character");
+    } else if (scope === "characters") {
+      list = list.filter(a => a.type === "character");
+    }
+
+    if (query) list = list.filter(a => a.name.toLowerCase().includes(query));
+
+    return list
       .map(a => ({
         id: a.id,
         uuid: a.uuid,
@@ -43,7 +60,8 @@ export const HANDLERS = {
         type: a.type,
         isPrimary: user.character?.id === a.id
       }))
-      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.name.localeCompare(b.name));
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.name.localeCompare(b.name))
+      .slice(0, 200);
   },
 
   /** Full prepared sheet payload. */
@@ -120,6 +138,11 @@ export const HANDLERS = {
     });
   }
 };
+
+/** Ownership granted to this specific user, rather than inherited from the default. */
+function ownsExplicitly(actor, user) {
+  return (actor.ownership?.[user.id] ?? 0) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
+}
 
 function requireActor(actorId, user) {
   const actor = game.actors.get(actorId);

@@ -15,7 +15,10 @@ export function Character() {
     return (
       <Card title={t("actors.title")}>
         <Empty text={s.bridgeError ? s.bridgeError : t("actors.empty")} />
-        <button className="btn block" onClick={() => void s.loadActors()}>{t("actors.reload")}</button>
+        <div className="row" style={{ gap: "0.5rem" }}>
+          <button className="btn grow" onClick={() => void s.loadActors()}>{t("actors.reload")}</button>
+          <button className="btn ghost grow" onClick={() => void s.loadActors("characters")}>{t("actors.showAll")}</button>
+        </div>
       </Card>
     );
   }
@@ -25,17 +28,35 @@ export function Character() {
   return (
     <div>
       {s.actors.length > 1 ? (
-        <div className="chips">
-          {s.actors.map(a => (
-            <button
-              key={a.id}
-              className={`chip ${a.id === s.actorId ? "active" : ""}`}
-              onClick={() => void s.openActor(a.id)}
+        s.actors.length > 8 ? (
+          <div className="row" style={{ marginBottom: "0.6rem", gap: "0.4rem" }}>
+            <select
+              className="grow"
+              value={s.actorId ?? ""}
+              onChange={event => void s.openActor(event.target.value)}
             >
-              {a.name}
+              {s.actors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            <button
+              className="btn ghost"
+              onClick={() => void s.loadActors(s.actorScope === "mine" ? "characters" : "mine")}
+            >
+              {s.actorScope === "mine" ? t("actors.showAll") : t("actors.showMine")}
             </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="chips">
+            {s.actors.map(a => (
+              <button
+                key={a.id}
+                className={`chip ${a.id === s.actorId ? "active" : ""}`}
+                onClick={() => void s.openActor(a.id)}
+              >
+                {a.name}
+              </button>
+            ))}
+          </div>
+        )
       ) : null}
 
       {s.sheetError ? <div className="error">{s.sheetError}</div> : null}

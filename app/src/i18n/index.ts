@@ -6,14 +6,21 @@ const ru: Dict = {
   "app.name": "Foundry Mobile",
   "app.loading": "Загрузка…",
 
+  "err.JOIN.ErrorUserDoesNotExist": "В этом мире нет такого игрока",
+  "err.JOIN.ErrorInvalidPassword": "Неверный пароль",
+  "err.JOIN.ErrorPasswordIncorrect": "Неверный пароль",
+  "err.JOIN.ErrorMustSelectUser": "Не выбран игрок",
+  "err.JOIN.ErrorAlreadyLoggedIn": "Этот игрок уже в игре",
+  "err.JOIN.ErrorTooManyAttempts": "Слишком много попыток входа, подождите немного",
+
   "connect.title": "Подключение",
   "connect.server": "Адрес сервера Foundry",
   "connect.serverHint": "Например 192.168.1.50:30000 или https://mygame.example.com",
   "connect.check": "Проверить сервер",
   "connect.checking": "Проверяем…",
-  "connect.user": "Имя игрока",
-  "connect.userHint": "Ровно так, как оно написано в списке игроков Foundry",
-  "connect.userPlaceholder": "Гельмут",
+  "connect.user": "Игрок",
+  "connect.selectUser": "Выберите игрока",
+  "connect.noUsers": "Сервер не отдал список игроков — проверьте, что мир запущен",
   "connect.password": "Пароль",
   "connect.passwordHint": "Оставьте пустым, если пароля нет",
   "connect.login": "Войти",
@@ -33,6 +40,8 @@ const ru: Dict = {
   "actors.title": "Мои персонажи",
   "actors.empty": "Вам не доступен ни один персонаж.",
   "actors.reload": "Обновить",
+  "actors.showAll": "Все персонажи",
+  "actors.showMine": "Только мои",
 
   "sheet.tab.main": "Главное",
   "sheet.tab.skills": "Навыки",
@@ -147,14 +156,21 @@ const en: Dict = {
   "app.name": "Foundry Mobile",
   "app.loading": "Loading…",
 
+  "err.JOIN.ErrorUserDoesNotExist": "There is no such player in this world",
+  "err.JOIN.ErrorInvalidPassword": "Wrong password",
+  "err.JOIN.ErrorPasswordIncorrect": "Wrong password",
+  "err.JOIN.ErrorMustSelectUser": "No player selected",
+  "err.JOIN.ErrorAlreadyLoggedIn": "That player is already in the game",
+  "err.JOIN.ErrorTooManyAttempts": "Too many login attempts, wait a moment",
+
   "connect.title": "Connect",
   "connect.server": "Foundry server address",
   "connect.serverHint": "e.g. 192.168.1.50:30000 or https://mygame.example.com",
   "connect.check": "Check server",
   "connect.checking": "Checking…",
-  "connect.user": "Player name",
-  "connect.userHint": "Exactly as it appears in the Foundry user list",
-  "connect.userPlaceholder": "Helmut",
+  "connect.user": "Player",
+  "connect.selectUser": "Choose a player",
+  "connect.noUsers": "The server returned no player list — check that a world is running",
   "connect.password": "Password",
   "connect.passwordHint": "Leave empty if there is no password",
   "connect.login": "Log in",
@@ -174,6 +190,8 @@ const en: Dict = {
   "actors.title": "My characters",
   "actors.empty": "You do not own any character.",
   "actors.reload": "Refresh",
+  "actors.showAll": "All characters",
+  "actors.showMine": "Only mine",
 
   "sheet.tab.main": "Main",
   "sheet.tab.skills": "Skills",
@@ -301,3 +319,12 @@ export const LANGS: { id: Lang; label: string }[] = [
   { id: "ru", label: "Русский" },
   { id: "en", label: "English" }
 ];
+
+/** Foundry answers a failed login with a bare localisation key such as JOIN.ErrorUserDoesNotExist. */
+export function translateError(lang: Lang, raw: string): string {
+  const message = (raw ?? "").trim();
+  if (!message) return translate(lang, "common.error");
+  const key = `err.${message}`;
+  const text = translate(lang, key);
+  return text === key ? message : text;
+}

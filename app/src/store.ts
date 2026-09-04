@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { Preferences } from "@capacitor/preferences";
-import { FoundryConnection, type ServerStatus } from "./foundry/client";
+import { FoundryConnection, type ServerStatus, type JoinUser } from "./foundry/client";
 import { defaultBase } from "./foundry/http";
 import { Bridge, type BridgeInfo } from "./foundry/bridge";
 import { detectLang, type Lang } from "./i18n";
@@ -27,6 +27,8 @@ interface State {
   tab: Tab;
 
   base: string;
+  users: JoinUser[];
+  userId: string;
   username: string;
   password: string;
   remember: boolean;
@@ -43,6 +45,7 @@ interface State {
   systemConfig: any;
 
   actors: any[];
+  actorScope: "mine" | "characters";
   actorId: string | null;
   sheet: any | null;
   sheetError: string | null;
@@ -57,7 +60,7 @@ interface State {
   login: () => Promise<void>;
   logout: () => Promise<void>;
   checkBridge: () => Promise<void>;
-  loadActors: () => Promise<void>;
+  loadActors: (scope?: "mine" | "characters") => Promise<void>;
   openActor: (actorId: string) => Promise<void>;
   refreshSheet: () => Promise<void>;
   sendChat: (text: string) => Promise<void>;
@@ -71,6 +74,8 @@ export const useStore = create<State>((set, get) => ({
   tab: "character",
 
   base: defaultBase(),
+  users: [],
+  userId: "",
   username: "",
   password: "",
   remember: true,
@@ -87,6 +92,7 @@ export const useStore = create<State>((set, get) => ({
   systemConfig: null,
 
   actors: [],
+  actorScope: "mine",
   actorId: null,
   sheet: null,
   sheetError: null,
@@ -104,6 +110,7 @@ export const useStore = create<State>((set, get) => ({
       set({
         lang: saved.lang ?? detectLang(),
         base: defaultBase() || saved.base || "",
+        userId: saved.userId ?? "",
         username: saved.username ?? "",
         password: saved.password ?? "",
         remember: saved.remember ?? true
@@ -115,18 +122,28 @@ export const useStore = create<State>((set, get) => ({
   async probe(base) {
     set({ busy: "probe", error: null });
     try {
-      const { status } = await conn.probe(base);
-      set({ status, base: conn.base, busy: null, probed: true });
+      const { status, users } = await conn.probe(base);
+      const saved = get().userId;
+      set({
+        status,
+        users,
+        base: conn.base,
+        busy: null,
+        probed: true,
+        userId: users.some(u => u.id === saved) ? saved : (users[0]?.id ?? "")
+      });
     } catch (err) {
       set({ busy: null, probed: false, error: (err as Error).message });
     }
   },
 
   async login() {
-    const { username, password } = get();
+    const { userId, users, password } = get();
+    const name = users.find(u => u.id === userId)?.name ?? get().username;
     set({ busy: "login", error: null });
     try {
-      await conn.login(username, password);
+      await conn.login(userId, name, password);
+      set({ username: name });
       await conn.connect();
       bridge.attach();
       set({ phase: "app", connected: true, busy: null, chat: readChat(conn.world) });
@@ -154,10 +171,11 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  async loadActors() {
+  async loadActors(scope) {
+    const wanted = scope ?? get().actorScope;
     try {
-      const actors = await bridge.actors();
-      set({ actors });
+      const actors = await bridge.actors(wanted);
+      set({ actors, actorScope: wanted });
       const current = get().actorId;
       if (!current && actors.length) void get().openActor(actors[0].id);
     } catch (err) {
@@ -192,6 +210,7 @@ async function persist(state: State) {
   const payload = {
     lang: state.lang,
     base: state.base,
+    userId: state.userId,
     username: state.username,
     remember: state.remember,
     password: state.remember ? state.password : ""

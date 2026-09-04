@@ -6,6 +6,8 @@ const CHAR_ORDER = ["ws", "bs", "s", "t", "i", "ag", "dex", "int", "wp", "fel"];
 const n = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const arr = v => (Array.isArray(v) ? v : v == null || v === "" ? [] : [v]);
 const loc = k => (k ? game.i18n.localize(k) : "");
+/** Some worlds carry the literal string "undefined" in free-text fields. */
+const clean = v => (v == null || v === "undefined" ? "" : String(v));
 
 export const wfrp4eAdapter = {
   id: "wfrp4e",
@@ -48,7 +50,7 @@ export const wfrp4eAdapter = {
         career: det.career?.value ?? "",
         careerLevel: det.careerlevel?.value ?? "",
         class: det.class?.value ?? "",
-        statusText: det.status?.value ?? "",
+        statusText: clean(det.status?.value),
         statusTier: det.status?.tier ?? "",
         statusStanding: det.status?.standing ?? "",
         move: {

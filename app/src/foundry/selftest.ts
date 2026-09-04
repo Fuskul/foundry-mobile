@@ -52,25 +52,28 @@ export async function runSelfTest(
     return steps;
   }
 
-  // 3. Session cookie from the join page.
+  // 3. Session and the list of users we may log in as.
   set("join", "running");
+  let users: { id: string; name: string }[] = [];
   try {
-    const { status } = await conn.probe(base);
-    set("join", "ok", `world "${status.world}", session ${conn.session ? "получена" : "через cookie"}`);
+    const probed = await conn.probe(base);
+    users = probed.users;
+    set("join", users.length ? "ok" : "fail", `игроков в списке: ${users.length}`);
   } catch (err) {
     set("join", "fail", String((err as Error).message ?? err));
   }
 
   // 4. Login.
-  if (!username) {
-    set("login", "skip", "имя игрока не заполнено");
+  const chosen = users.find(u => u.name === username) ?? users.find(u => u.id === username);
+  if (!chosen) {
+    set("login", "skip", username ? `игрок "${username}" не найден в списке` : "игрок не выбран");
     set("socket", "skip"); set("world", "skip"); set("bridge", "skip");
     return steps;
   }
   set("login", "running");
   try {
-    await conn.login(username, password);
-    set("login", "ok", `вошли как ${username}`);
+    await conn.login(chosen.id, chosen.name, password);
+    set("login", "ok", `вошли как ${chosen.name}`);
   } catch (err) {
     set("login", "fail", String((err as Error).message ?? err));
     set("socket", "skip"); set("world", "skip"); set("bridge", "skip");

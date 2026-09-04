@@ -100,7 +100,9 @@ export class Bridge {
     return this.info;
   }
 
-  actors() { return this.request<any[]>("actors"); }
+  actors(scope: "mine" | "characters" | "all" = "mine", query = "") {
+    return this.request<any[]>("actors", { scope, query });
+  }
   sheet(actorId: string) { return this.request<any>("sheet", { actorId }, 20000); }
   config() { return this.request<any>("config"); }
   combat() { return this.request<any>("combat"); }

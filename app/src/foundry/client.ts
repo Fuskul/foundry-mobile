@@ -1,6 +1,7 @@
 import { io, Socket } from "socket.io-client";
-import { http, normaliseBase, isNative } from "./http";
+import { http, normaliseBase, isNative, readCookie } from "./http";
 
+export interface JoinUser { id: string; name: string; role?: number }
 export interface ServerStatus {
   active?: boolean;
   version?: string;
@@ -61,8 +62,12 @@ export class FoundryConnection {
 
   /* ---------------------------------------------------------------- probing */
 
-  /** Ask the server who it is and pick up a session cookie. */
-  async probe(rawBase: string): Promise<{ status: ServerStatus }> {
+  /**
+   * Ask the server who it is and which users may log in.
+   * Foundry 14 no longer lists users on the join page: the list arrives over a
+   * socket that is open before anyone has logged in, as "getJoinData".
+   */
+  async probe(rawBase: string): Promise<{ status: ServerStatus; users: JoinUser[] }> {
     const base = normaliseBase(rawBase);
     this.base = base;
     this.log("info", `probing ${base}`);
@@ -75,16 +80,65 @@ export class FoundryConnection {
     this.log("info", `status: ${JSON.stringify(status)}`);
     if (status.active === false) throw new Error("No world is running on this server");
 
-    // The join page hands out the session cookie the socket needs.
+    // The join page hands out the session the socket needs.
     try {
       const join = await http({ url: `${base}/join` });
       this.captureSession(join.headers);
+      await this.captureSessionFromJar();
       this.log("info", `GET /join -> ${join.status}`);
     } catch (err) {
       this.log("warn", `GET /join failed: ${String(err)}`);
     }
 
-    return { status };
+    const users = await this.readJoinData();
+    return { status, users };
+  }
+
+  /** Open a throwaway socket just long enough to read the user list. */
+  private readJoinData(): Promise<JoinUser[]> {
+    return new Promise(resolve => {
+      let socket: Socket | null = null;
+      const finish = (users: JoinUser[], note: string) => {
+        this.log(users.length ? "info" : "warn", `getJoinData: ${note}`);
+        try { socket?.disconnect(); } catch { /* already gone */ }
+        resolve(users);
+      };
+
+      try {
+        socket = this.openSocket();
+      } catch (err) {
+        return finish([], `could not open socket (${String(err)})`);
+      }
+
+      const timer = setTimeout(() => finish([], "timed out"), 15000);
+
+      socket.on("connect_error", err => {
+        clearTimeout(timer);
+        finish([], `socket error: ${err?.message ?? err}`);
+      });
+
+      socket.on("connect", () => {
+        socket!.emit("getJoinData", (data: any) => {
+          clearTimeout(timer);
+          const users: JoinUser[] = (data?.users ?? []).map((u: any) => ({
+            id: u._id ?? u.id,
+            name: u.name,
+            role: u.role
+          }));
+          finish(users, `${users.length} user(s)`);
+        });
+      });
+    });
+  }
+
+  /** Native builds cannot read the cookie from the document, so ask the jar. */
+  private async captureSessionFromJar() {
+    if (this.session || !isNative()) return;
+    const value = await readCookie(this.base, "session");
+    if (value) {
+      this.session = value;
+      this.log("info", `session from the native store: ${mask(value)}`);
+    }
   }
 
   private captureSession(headers: Record<string, string>) {
@@ -104,8 +158,8 @@ export class FoundryConnection {
 
   /* ----------------------------------------------------------------- login */
 
-  async login(username: string, password: string): Promise<void> {
-    const body = { action: "join", username, password: password ?? "" };
+  async login(userId: string, username: string, password: string): Promise<void> {
+    const body = { action: "join", userId, username, password: password ?? "" };
     const res = await http({
       url: `${this.base}/join`,
       method: "POST",
@@ -113,26 +167,27 @@ export class FoundryConnection {
       headers: this.session ? { Cookie: `session=${this.session}` } : {}
     });
     this.captureSession(res.headers);
+    await this.captureSessionFromJar();
 
-    let payload: any = {};
-    try { payload = JSON.parse(res.data); } catch { /* Foundry may answer with HTML */ }
-    this.log("info", `POST /join -> ${res.status} ${JSON.stringify(payload).slice(0, 200)}`);
+    // Success comes back as JSON; failures are a bare localisation key.
+    const raw = (res.data ?? "").trim();
+    let payload: any = null;
+    try { payload = JSON.parse(raw); } catch { /* plain text error */ }
+    this.log("info", `POST /join -> ${res.status} ${raw.slice(0, 160)}`);
 
-    const failed = res.status >= 400 || payload?.status === "failed" || !!payload?.error;
-    if (failed) throw new Error(payload?.error ?? payload?.message ?? `Login failed (HTTP ${res.status})`);
+    const failed = res.status >= 400 || payload?.status === "failed" || (!payload && !!raw);
+    if (failed) throw new Error(payload?.error ?? payload?.message ?? raw ?? `HTTP ${res.status}`);
 
+    this.userId = userId;
     this.userName = username;
-    if (payload?.userId) this.userId = payload.userId;
   }
 
   /* ---------------------------------------------------------------- socket */
 
-  async connect(): Promise<void> {
-    await this.disconnect();
+  /** Build a socket.io connection to this server. */
+  private openSocket(): Socket {
     const path = `${this.routePrefix}/socket.io`;
-    this.log("info", `opening socket ${this.base}${path} (session ${mask(this.session)})`);
-
-    const socket = io(this.base, {
+    return io(this.base, {
       path,
       // Inside the app the page origin is not the Foundry server, so socket.io's
       // long-polling fallback would be blocked as a cross-origin request.
@@ -146,13 +201,20 @@ export class FoundryConnection {
       timeout: 20000,
       forceNew: true
     });
+  }
+
+  async connect(): Promise<void> {
+    await this.disconnect();
+    this.log("info", `opening socket ${this.base}${this.routePrefix}/socket.io (session ${mask(this.session)})`);
+
+    const socket = this.openSocket();
     this.socket = socket;
 
     socket.on("connect", () => { this.log("info", "socket connected"); this.emit("status"); });
     socket.on("disconnect", reason => { this.log("warn", `socket disconnected: ${reason}`); this.emit("status"); });
     socket.on("connect_error", err => { this.log("error", `socket error: ${err?.message ?? err}`); this.emit("status"); });
     socket.on("session", (data: any) => {
-      this.log("info", `session event: ${JSON.stringify(data)}`);
+      this.log("info", `bound to user ${data?.userId ?? "?"}`);
       if (data?.userId) this.userId = data.userId;
     });
     socket.on("modifyDocument", (response: any) => this.onModifyDocument(response));
