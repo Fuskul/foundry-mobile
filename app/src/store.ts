@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { Preferences } from "@capacitor/preferences";
-import { FoundryConnection, type JoinUser, type ServerStatus } from "./foundry/client";
+import { FoundryConnection, type ServerStatus } from "./foundry/client";
+import { defaultBase } from "./foundry/http";
 import { Bridge, type BridgeInfo } from "./foundry/bridge";
 import { detectLang, type Lang } from "./i18n";
 
@@ -26,10 +27,10 @@ interface State {
   tab: Tab;
 
   base: string;
+  username: string;
   password: string;
   remember: boolean;
-  users: JoinUser[];
-  userId: string;
+  probed: boolean;
   status: ServerStatus;
 
   busy: string | null;
@@ -69,11 +70,11 @@ export const useStore = create<State>((set, get) => ({
   phase: "connect",
   tab: "character",
 
-  base: "",
+  base: defaultBase(),
+  username: "",
   password: "",
   remember: true,
-  users: [],
-  userId: "",
+  probed: !!defaultBase(),
   status: {},
 
   busy: null,
@@ -102,30 +103,30 @@ export const useStore = create<State>((set, get) => ({
       const saved = JSON.parse(value);
       set({
         lang: saved.lang ?? detectLang(),
-        base: saved.base ?? "",
-        userId: saved.userId ?? "",
+        base: defaultBase() || saved.base || "",
+        username: saved.username ?? "",
         password: saved.password ?? "",
         remember: saved.remember ?? true
       });
+      if (defaultBase()) void get().probe(defaultBase());
     } catch { /* first run */ }
   },
 
   async probe(base) {
     set({ busy: "probe", error: null });
     try {
-      const { status, users } = await conn.probe(base);
-      set({ status, users, base: conn.base, busy: null });
-      if (users.length && !users.some(u => u.id === get().userId)) set({ userId: users[0].id });
+      const { status } = await conn.probe(base);
+      set({ status, base: conn.base, busy: null, probed: true });
     } catch (err) {
-      set({ busy: null, error: (err as Error).message });
+      set({ busy: null, probed: false, error: (err as Error).message });
     }
   },
 
   async login() {
-    const { userId, password } = get();
+    const { username, password } = get();
     set({ busy: "login", error: null });
     try {
-      await conn.login(userId, password);
+      await conn.login(username, password);
       await conn.connect();
       bridge.attach();
       set({ phase: "app", connected: true, busy: null, chat: readChat(conn.world) });
@@ -191,7 +192,7 @@ async function persist(state: State) {
   const payload = {
     lang: state.lang,
     base: state.base,
-    userId: state.userId,
+    username: state.username,
     remember: state.remember,
     password: state.remember ? state.password : ""
   };

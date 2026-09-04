@@ -69,3 +69,19 @@ export function normaliseBase(input: string): string {
 }
 
 export { isNative };
+
+/**
+ * When the app is served by Foundry itself (…/modules/fvtt-mobile-bridge/app/),
+ * the server address is simply where we came from.
+ */
+export function defaultBase(): string {
+  try {
+    const { origin, pathname } = window.location;
+    const marker = "/modules/fvtt-mobile-bridge/";
+    const at = pathname.indexOf(marker);
+    if (at < 0) return "";
+    return `${origin}${pathname.slice(0, at)}`;
+  } catch {
+    return "";
+  }
+}

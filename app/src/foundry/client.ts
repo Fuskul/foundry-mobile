@@ -1,7 +1,6 @@
 import { io, Socket } from "socket.io-client";
-import { http, normaliseBase } from "./http";
+import { http, normaliseBase, isNative } from "./http";
 
-export interface JoinUser { id: string; name: string; role?: number }
 export interface ServerStatus {
   active?: boolean;
   version?: string;
@@ -27,6 +26,7 @@ export class FoundryConnection {
   session = "";
   socket: Socket | null = null;
   userId = "";
+  userName = "";
   world: any = null;
   logs: LogLine[] = [];
 
@@ -61,28 +61,30 @@ export class FoundryConnection {
 
   /* ---------------------------------------------------------------- probing */
 
-  /** Ask the server who it is and which users can log in. */
-  async probe(rawBase: string): Promise<{ status: ServerStatus; users: JoinUser[] }> {
+  /** Ask the server who it is and pick up a session cookie. */
+  async probe(rawBase: string): Promise<{ status: ServerStatus }> {
     const base = normaliseBase(rawBase);
     this.base = base;
     this.log("info", `probing ${base}`);
 
     let status: ServerStatus = {};
+    const res = await http({ url: `${base}/api/status` });
+    if (res.status >= 400) throw new Error(`Server answered ${res.status} on /api/status`);
+    try { status = JSON.parse(res.data); }
+    catch { throw new Error("This does not look like a Foundry server"); }
+    this.log("info", `status: ${JSON.stringify(status)}`);
+    if (status.active === false) throw new Error("No world is running on this server");
+
+    // The join page hands out the session cookie the socket needs.
     try {
-      const res = await http({ url: `${base}/api/status` });
-      if (res.status === 200) status = JSON.parse(res.data);
-      this.log("info", `status ${res.status}: ${JSON.stringify(status)}`);
+      const join = await http({ url: `${base}/join` });
+      this.captureSession(join.headers);
+      this.log("info", `GET /join -> ${join.status}`);
     } catch (err) {
-      this.log("warn", `/api/status failed: ${String(err)}`);
+      this.log("warn", `GET /join failed: ${String(err)}`);
     }
 
-    const join = await http({ url: `${base}/join` });
-    if (join.status >= 400) throw new Error(`Server answered ${join.status} on /join`);
-    this.captureSession(join.headers);
-    const users = parseJoinUsers(join.data);
-    this.log("info", `found ${users.length} user(s) on the join page`);
-    if (!users.length) this.log("warn", "could not read the user list from /join");
-    return { status, users };
+    return { status };
   }
 
   private captureSession(headers: Record<string, string>) {
@@ -102,8 +104,8 @@ export class FoundryConnection {
 
   /* ----------------------------------------------------------------- login */
 
-  async login(userId: string, password: string): Promise<void> {
-    const body = { action: "join", userid: userId, password: password ?? "" };
+  async login(username: string, password: string): Promise<void> {
+    const body = { action: "join", username, password: password ?? "" };
     const res = await http({
       url: `${this.base}/join`,
       method: "POST",
@@ -113,13 +115,14 @@ export class FoundryConnection {
     this.captureSession(res.headers);
 
     let payload: any = {};
-    try { payload = JSON.parse(res.data); } catch { /* Foundry may answer with HTML on failure */ }
+    try { payload = JSON.parse(res.data); } catch { /* Foundry may answer with HTML */ }
+    this.log("info", `POST /join -> ${res.status} ${JSON.stringify(payload).slice(0, 200)}`);
 
-    if (res.status >= 400 || payload?.error) {
-      throw new Error(payload?.error ?? `Login failed (HTTP ${res.status})`);
-    }
-    this.userId = userId;
-    this.log("info", `logged in as ${userId}, redirect=${payload?.redirect ?? "-"}`);
+    const failed = res.status >= 400 || payload?.status === "failed" || !!payload?.error;
+    if (failed) throw new Error(payload?.error ?? payload?.message ?? `Login failed (HTTP ${res.status})`);
+
+    this.userName = username;
+    if (payload?.userId) this.userId = payload.userId;
   }
 
   /* ---------------------------------------------------------------- socket */
@@ -131,8 +134,11 @@ export class FoundryConnection {
 
     const socket = io(this.base, {
       path,
-      transports: ["websocket", "polling"],
-      query: { session: this.session },
+      // Inside the app the page origin is not the Foundry server, so socket.io's
+      // long-polling fallback would be blocked as a cross-origin request.
+      // WebSockets are exempt from that rule, so native builds go straight to it.
+      transports: isNative() ? ["websocket"] : ["websocket", "polling"],
+      query: this.session ? { session: this.session } : {},
       withCredentials: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -150,6 +156,10 @@ export class FoundryConnection {
       if (data?.userId) this.userId = data.userId;
     });
     socket.on("modifyDocument", (response: any) => this.onModifyDocument(response));
+    socket.onAny((event: string, ...args: any[]) => {
+      if (event === "modifyDocument" || event.startsWith("module.")) return;
+      this.log("info", `<- ${event} ${JSON.stringify(args).slice(0, 160)}`);
+    });
     socket.on("userActivity", (userId: string, activity: any) => this.emit("userActivity", userId, activity));
 
     await new Promise<void>((resolve, reject) => {
@@ -205,21 +215,3 @@ function mask(value: string) {
   return `${value.slice(0, 4)}…${value.slice(-4)}`;
 }
 
-/** The /join page lists every user in a <select name="userid">. */
-export function parseJoinUsers(html: string): JoinUser[] {
-  const users: JoinUser[] = [];
-  const select = /<select[^>]*name=["']userid["'][\s\S]*?<\/select>/i.exec(html)?.[0] ?? html;
-  const option = /<option[^>]*value=["']([a-zA-Z0-9]{8,})["'][^>]*>([\s\S]*?)<\/option>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = option.exec(select))) {
-    const name = match[2].replace(/<[^>]*>/g, "").trim();
-    if (name) users.push({ id: match[1], name: decodeEntities(name) });
-  }
-  return users;
-}
-
-function decodeEntities(text: string): string {
-  const el = document.createElement("textarea");
-  el.innerHTML = text;
-  return el.value;
-}

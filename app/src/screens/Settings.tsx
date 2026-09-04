@@ -2,6 +2,7 @@ import React from "react";
 import { useStore, conn } from "../store";
 import { useT, Card } from "../ui/common";
 import { LANGS } from "../i18n";
+import { Diagnostics } from "../ui/Diagnostics";
 
 export function Settings() {
   const t = useT();
@@ -55,6 +56,8 @@ export function Settings() {
           <div className="error">{t("settings.bridgeMissing")}{s.bridgeError ? ` (${s.bridgeError})` : ""}</div>
         )}
       </Card>
+
+      <Diagnostics />
 
       <Card title={t("settings.logs")}>
         <pre className="log">{logText || "—"}</pre>

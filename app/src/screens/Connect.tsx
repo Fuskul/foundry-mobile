@@ -2,6 +2,7 @@ import React from "react";
 import { useStore } from "../store";
 import { useT, Field, Card } from "../ui/common";
 import { LANGS } from "../i18n";
+import { Diagnostics } from "../ui/Diagnostics";
 
 export function Connect() {
   const t = useT();
@@ -9,8 +10,6 @@ export function Connect() {
   const [base, setBase] = React.useState(s.base);
 
   React.useEffect(() => setBase(s.base), [s.base]);
-
-  const probed = s.users.length > 0;
 
   return (
     <div>
@@ -35,7 +34,7 @@ export function Connect() {
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            placeholder="192.168.1.50:30000"
+            placeholder="192.168.1.103:30000"
             onChange={event => setBase(event.target.value)}
           />
         </Field>
@@ -47,22 +46,28 @@ export function Connect() {
         >
           {s.busy === "probe" ? t("connect.checking") : t("connect.check")}
         </button>
+
+        {s.probed && s.status.version ? (
+          <div className="notice small" style={{ marginTop: "0.7rem", marginBottom: 0 }}>
+            {[s.status.world, `${s.status.system ?? ""} ${s.status.systemVersion ?? ""}`.trim(), `Foundry ${s.status.version}`]
+              .filter(Boolean)
+              .join(" · ")}
+          </div>
+        ) : null}
       </Card>
 
-      {probed ? (
+      {s.probed ? (
         <Card>
-          <div className="small muted stack" style={{ gap: "0.15rem", marginBottom: "0.7rem" }}>
-            {s.status.world ? <div>{t("connect.world")}: <b>{s.status.world}</b></div> : null}
-            {s.status.system ? <div>{t("connect.system")}: <b>{s.status.system} {s.status.systemVersion ?? ""}</b></div> : null}
-            {s.status.version ? <div>{t("connect.version")}: <b>{s.status.version}</b></div> : null}
-            {s.status.activeUsers != null ? <div>{t("connect.online")}: <b>{s.status.activeUsers}</b></div> : null}
-          </div>
-
-          <Field label={t("connect.user")}>
-            <select value={s.userId} onChange={event => s.setField("userId", event.target.value)}>
-              <option value="">{t("connect.selectUser")}</option>
-              {s.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
+          <Field label={t("connect.user")} hint={t("connect.userHint")}>
+            <input
+              value={s.username}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder={t("connect.userPlaceholder")}
+              onChange={event => s.setField("username", event.target.value)}
+              onKeyDown={event => { if (event.key === "Enter" && s.username) void s.login(); }}
+            />
           </Field>
 
           <Field label={t("connect.password")} hint={t("connect.passwordHint")}>
@@ -70,6 +75,7 @@ export function Connect() {
               type="password"
               value={s.password}
               onChange={event => s.setField("password", event.target.value)}
+              onKeyDown={event => { if (event.key === "Enter" && s.username) void s.login(); }}
             />
           </Field>
 
@@ -85,7 +91,7 @@ export function Connect() {
 
           <button
             className="btn primary block"
-            disabled={!s.userId || s.busy === "login"}
+            disabled={!s.username.trim() || s.busy === "login"}
             onClick={() => void s.login()}
           >
             {s.busy === "login" ? t("connect.loggingIn") : t("connect.login")}
@@ -93,7 +99,7 @@ export function Connect() {
         </Card>
       ) : null}
 
-      {s.users.length === 0 && s.status.version ? <div className="error">{t("connect.noUsers")}</div> : null}
+      {s.error ? <Diagnostics /> : null}
     </div>
   );
 }
