@@ -7,8 +7,9 @@ android {
         applicationId "io.foundrymobile.companion"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // CI passes the run number so each build is seen as an upgrade.
+        versionCode(System.getenv("VERSION_CODE") ? System.getenv("VERSION_CODE").toInteger() : 1)
+        versionName(System.getenv("VERSION_NAME") ?: "0.1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +17,23 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        // A fixed key so every build installs as an update instead of a new app.
+        // This is a hobby-project signing key, not a secret: it only keeps the
+        // app's identity stable. Replace it before publishing to Google Play.
+        shared {
+            storeFile file('../keystore/foundry-mobile.jks')
+            storePassword 'foundrymobile'
+            keyAlias 'foundry-mobile'
+            keyPassword 'foundrymobile'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.shared
+        }
         release {
+            signingConfig signingConfigs.shared
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

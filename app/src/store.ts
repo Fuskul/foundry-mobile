@@ -27,7 +27,9 @@ interface State {
   tab: Tab;
 
   base: string;
+  servers: string[];
   users: JoinUser[];
+  usersError: string;
   userId: string;
   username: string;
   password: string;
@@ -56,6 +58,7 @@ interface State {
   setField: <K extends keyof State>(key: K, value: State[K]) => void;
 
   restore: () => Promise<void>;
+  forgetServer: (base: string) => void;
   probe: (base: string) => Promise<void>;
   login: () => Promise<void>;
   logout: () => Promise<void>;
@@ -74,7 +77,9 @@ export const useStore = create<State>((set, get) => ({
   tab: "character",
 
   base: defaultBase(),
+  servers: [],
   users: [],
+  usersError: "",
   userId: "",
   username: "",
   password: "",
@@ -110,6 +115,7 @@ export const useStore = create<State>((set, get) => ({
       set({
         lang: saved.lang ?? detectLang(),
         base: defaultBase() || saved.base || "",
+        servers: Array.isArray(saved.servers) ? saved.servers : (saved.base ? [saved.base] : []),
         userId: saved.userId ?? "",
         username: saved.username ?? "",
         password: saved.password ?? "",
@@ -119,21 +125,31 @@ export const useStore = create<State>((set, get) => ({
     } catch { /* first run */ }
   },
 
+  forgetServer(base) {
+    const servers = get().servers.filter(s => s !== base);
+    set({ servers });
+    void persist({ ...get(), servers });
+  },
+
   async probe(base) {
     set({ busy: "probe", error: null });
     try {
       const { status, users } = await conn.probe(base);
       const saved = get().userId;
+      const servers = [conn.base, ...get().servers.filter(s => s !== conn.base)].slice(0, 8);
       set({
         status,
         users,
+        servers,
+        usersError: conn.joinError,
         base: conn.base,
         busy: null,
         probed: true,
         userId: users.some(u => u.id === saved) ? saved : (users[0]?.id ?? "")
       });
+      void persist(get());
     } catch (err) {
-      set({ busy: null, probed: false, error: (err as Error).message });
+      set({ busy: null, probed: false, users: [], error: (err as Error).message });
     }
   },
 
@@ -206,7 +222,7 @@ export const useStore = create<State>((set, get) => ({
   }
 }));
 
-async function persist(state: State) {
+async function persist(state: Pick<State, "lang" | "base" | "servers" | "userId" | "username" | "remember" | "password">) {
   const payload = {
     lang: state.lang,
     base: state.base,

@@ -28,6 +28,7 @@ export class FoundryConnection {
   socket: Socket | null = null;
   userId = "";
   userName = "";
+  joinError = "";
   world: any = null;
   logs: LogLine[] = [];
 
@@ -99,6 +100,7 @@ export class FoundryConnection {
     return new Promise(resolve => {
       let socket: Socket | null = null;
       const finish = (users: JoinUser[], note: string) => {
+        this.joinError = users.length ? "" : note;
         this.log(users.length ? "info" : "warn", `getJoinData: ${note}`);
         try { socket?.disconnect(); } catch { /* already gone */ }
         resolve(users);
@@ -142,17 +144,24 @@ export class FoundryConnection {
   }
 
   private captureSession(headers: Record<string, string>) {
-    const raw = headers["set-cookie"] ?? "";
-    const fromHeader = /(?:^|[;,\s])session=([^;,\s]+)/.exec(raw)?.[1];
-    if (fromHeader) {
-      this.session = decodeURIComponent(fromHeader);
-      this.log("info", `session from header: ${mask(this.session)}`);
-      return;
+    const names = Object.keys(headers ?? {});
+    this.log("info", `headers: ${names.join(", ") || "(none)"}`);
+
+    // Different HTTP stacks expose the cookie header under different names.
+    for (const [key, value] of Object.entries(headers ?? {})) {
+      if (!/cookie/i.test(key)) continue;
+      const found = /(?:^|[;,\s])session=([^;,\s]+)/.exec(String(value))?.[1];
+      if (found) {
+        this.session = decodeURIComponent(found);
+        this.log("info", `session from "${key}": ${mask(this.session)}`);
+        return;
+      }
     }
-    const fromCookie = /(?:^|;\s*)session=([^;]+)/.exec(document.cookie ?? "")?.[1];
-    if (fromCookie) {
-      this.session = decodeURIComponent(fromCookie);
-      this.log("info", `session from document.cookie: ${mask(this.session)}`);
+
+    const fromDocument = /(?:^|;\s*)session=([^;]+)/.exec(document.cookie ?? "")?.[1];
+    if (fromDocument) {
+      this.session = decodeURIComponent(fromDocument);
+      this.log("info", `session from the page: ${mask(this.session)}`);
     }
   }
 

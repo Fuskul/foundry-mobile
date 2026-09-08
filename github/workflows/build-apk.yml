@@ -38,6 +38,9 @@ jobs:
 
       - name: Build debug APK
         working-directory: app/android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 0.1.${{ github.run_number }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug

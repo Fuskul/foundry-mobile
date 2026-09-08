@@ -58,7 +58,8 @@ export async function runSelfTest(
   try {
     const probed = await conn.probe(base);
     users = probed.users;
-    set("join", users.length ? "ok" : "fail", `игроков в списке: ${users.length}`);
+    set("join", users.length ? "ok" : "fail",
+      users.length ? `игроков в списке: ${users.length}` : (conn.joinError || "список пуст"));
   } catch (err) {
     set("join", "fail", String((err as Error).message ?? err));
   }

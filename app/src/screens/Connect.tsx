@@ -11,6 +11,11 @@ export function Connect() {
 
   React.useEffect(() => setBase(s.base), [s.base]);
 
+  const check = (address: string) => {
+    setBase(address);
+    void s.probe(address);
+  };
+
   return (
     <div>
       <Card>
@@ -24,6 +29,32 @@ export function Connect() {
             {LANGS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
           </select>
         </div>
+
+        {s.servers.length ? (
+          <>
+            <span className="small muted">{t("connect.saved")}</span>
+            <div className="chips" style={{ marginTop: "0.3rem" }}>
+              {s.servers.map(address => (
+                <span key={address} className={`chip ${address === s.base ? "active" : ""}`} style={{ paddingRight: "0.35rem" }}>
+                  <button
+                    className="chip-label"
+                    onClick={() => check(address)}
+                    title={address}
+                  >
+                    {address.replace(/^https?:\/\//, "")}
+                  </button>
+                  <button
+                    className="chip-x"
+                    aria-label={t("connect.forget")}
+                    onClick={() => s.forgetServer(address)}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </>
+        ) : null}
 
         {s.error ? <div className="error">{translateError(s.lang, s.error)}</div> : null}
 
@@ -42,7 +73,7 @@ export function Connect() {
         <button
           className="btn block"
           disabled={s.busy === "probe" || !base.trim()}
-          onClick={() => void s.probe(base)}
+          onClick={() => check(base)}
         >
           {s.busy === "probe" ? t("connect.checking") : t("connect.check")}
         </button>
@@ -65,7 +96,10 @@ export function Connect() {
                 {s.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             ) : (
-              <div className="error" style={{ margin: 0 }}>{t("connect.noUsers")}</div>
+              <div className="error" style={{ margin: 0 }}>
+                {t("connect.noUsers")}
+                {s.usersError ? <div className="small" style={{ marginTop: "0.3rem", opacity: 0.85 }}>{s.usersError}</div> : null}
+              </div>
             )}
           </Field>
 
@@ -98,7 +132,7 @@ export function Connect() {
         </Card>
       ) : null}
 
-      {s.error ? <Diagnostics /> : null}
+      <Diagnostics />
     </div>
   );
 }
