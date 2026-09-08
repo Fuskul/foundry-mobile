@@ -15,7 +15,9 @@ const config: CapacitorConfig = {
   plugins: {
     // Native HTTP: requests leave the app instead of the WebView, so the
     // browser's same-origin rules never apply to the Foundry server.
-    CapacitorHttp: { enabled: false },
+    // Enabled so requests run natively AND their cookies are stored in the
+    // WebView's own cookie jar — which is the jar the socket handshake reads.
+    CapacitorHttp: { enabled: true },
     // Share the cookie jar with the WebView so the Foundry session cookie is
     // present on the socket.io handshake (Foundry 14 binds sessions by cookie).
     CapacitorCookies: { enabled: true }

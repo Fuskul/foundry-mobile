@@ -86,12 +86,11 @@ export function defaultBase(): string {
   }
 }
 
-/** Read a cookie from the native jar; the WebView cannot see another host's cookies. */
-export async function readCookie(url: string, name: string): Promise<string> {
+/** Everything the native cookie jar holds for this server. */
+export async function readCookies(url: string): Promise<Record<string, string>> {
   try {
-    const jar: Record<string, string> = await CapacitorCookies.getCookies({ url } as any);
-    return jar?.[name] ?? "";
+    return (await CapacitorCookies.getCookies({ url } as any)) ?? {};
   } catch {
-    return "";
+    return {};
   }
 }

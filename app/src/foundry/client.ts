@@ -1,5 +1,5 @@
 import { io, Socket } from "socket.io-client";
-import { http, normaliseBase, isNative, readCookie } from "./http";
+import { http, normaliseBase, isNative, readCookies } from "./http";
 
 export interface JoinUser { id: string; name: string; role?: number }
 export interface ServerStatus {
@@ -176,11 +176,13 @@ export class FoundryConnection {
 
   /** Native builds cannot read the cookie from the document, so ask the jar. */
   private async captureSessionFromJar() {
-    if (this.session || !isNative()) return;
-    const value = await readCookie(this.base, "session");
-    if (value) {
-      this.session = value;
-      this.log("info", `session from the native store: ${mask(value)}`);
+    if (!isNative()) return;
+    const jar = await readCookies(this.base);
+    const names = Object.keys(jar);
+    this.log("info", `cookie store holds: ${names.join(", ") || "(nothing)"}`);
+    if (!this.session && jar.session) {
+      this.session = jar.session;
+      this.log("info", `session from the cookie store: ${mask(jar.session)}`);
     }
   }
 
@@ -239,10 +241,12 @@ export class FoundryConnection {
     const path = `${this.routePrefix}/socket.io`;
     return io(this.base, {
       path,
-      // Inside the app the page origin is not the Foundry server, so socket.io's
-      // long-polling fallback would be blocked as a cross-origin request.
-      // WebSockets are exempt from that rule, so native builds go straight to it.
-      transports: isNative() ? ["websocket"] : ["websocket", "polling"],
+      // A bare WebSocket handshake from the app carries no cookies, so the server
+      // sees an anonymous connection. Long polling goes through the native HTTP
+      // stack instead, which does hold the session, and the connection then
+      // upgrades to a WebSocket while keeping the session it established.
+      transports: ["polling", "websocket"],
+      upgrade: true,
       query: this.session ? { session: this.session } : {},
       withCredentials: true,
       reconnection: true,
