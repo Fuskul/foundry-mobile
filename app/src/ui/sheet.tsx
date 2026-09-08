@@ -1,5 +1,5 @@
 import React from "react";
-import { Html, useT } from "./common";
+import { Html, useT, Modal } from "./common";
 import { useStore } from "../store";
 
 /** Absolute URL for an image path coming from Foundry. */
@@ -137,5 +137,49 @@ export function Lightbox({ src, onClose }: { src: string | null; onClose: () => 
     <div className="lightbox" onClick={onClose}>
       <img src={src} alt="" />
     </div>
+  );
+}
+
+/**
+ * The "+" the desktop sheet shows next to anything that can still be advanced
+ * in the current career — with the same confirmation, since it spends
+ * experience, and a "✓" once the career has nothing left to give.
+ */
+export function Advance(props: { name: string; cost?: number | null; complete?: boolean; onConfirm: () => Promise<void> | void }) {
+  const t = useT();
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+
+  return (
+    <>
+      <button
+        className={`advbtn ${props.complete ? "done" : ""}`}
+        aria-label={t("sheet.advance")}
+        onClick={event => { event.stopPropagation(); setOpen(true); }}
+      >
+        {props.complete ? "✓" : "+"}
+      </button>
+      <Modal open={open} title={t("sheet.advance")} onClose={() => setOpen(false)}>
+        <p style={{ marginTop: 0 }}>
+          {props.cost != null
+            ? t("sheet.advanceAsk", { name: props.name, cost: props.cost })
+            : t("sheet.advanceAskNoCost", { name: props.name })}
+        </p>
+        <div className="row" style={{ gap: "0.5rem" }}>
+          <button className="btn ghost grow" onClick={() => setOpen(false)}>{t("common.cancel")}</button>
+          <button
+            className="btn primary grow"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try { await props.onConfirm(); setOpen(false); }
+              finally { setBusy(false); }
+            }}
+          >
+            {t("sheet.spend")}
+          </button>
+        </div>
+      </Modal>
+    </>
   );
 }

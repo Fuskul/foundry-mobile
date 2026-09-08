@@ -1,7 +1,7 @@
 import React from "react";
 import { useStore, bridge } from "../store";
 import { useT, Card, Empty, Html, useSwipe } from "../ui/common";
-import { Section, Row, NumEdit, Step, Check, TextEdit, imgUrl, useSheetLabels, Lightbox } from "../ui/sheet";
+import { Section, Row, NumEdit, Step, Check, TextEdit, imgUrl, useSheetLabels, Lightbox, Advance } from "../ui/sheet";
 import { RollDialog, type RollTarget } from "../ui/RollDialog";
 
 type SheetTab = "main" | "skills" | "talents" | "combat" | "effects" | "magic" | "religion" | "trappings" | "notes";
@@ -75,7 +75,7 @@ export function Character() {
             ))}
           </div>
 
-          <div {...swipe}>
+          <div className="sheetcols" {...swipe}>
 
           {active === "main" ? <MainTab sheet={sheet} onRoll={roll} /> : null}
           {active === "skills" ? <SkillsTab sheet={sheet} onRoll={roll} /> : null}
@@ -105,6 +105,11 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
   const [editing, setEditing] = React.useState(false);
   const [zoom, setZoom] = React.useState<string | null>(null);
   const d = sheet.details ?? {};
+  // "Brass 3" already carries the standing in some worlds; never print it twice.
+  const statusLine = [d.statusText, /\d/.test(String(d.statusText ?? "")) ? "" : d.statusStanding]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
   const st = sheet.status ?? {};
 
   return (
@@ -154,7 +159,17 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
                 className="charbox"
                 onClick={() => onRoll({ actorId: sheet.id, kind: "characteristic", key: c.key, name: c.label, subtitle: `${c.value} (${c.bonus})` })}
               >
-                <div className="abbrev">{c.abbrev}</div>
+                <div className="abbrev">
+                  {c.abbrev}
+                  {c.inCareer ? (
+                    <Advance
+                      name={c.label}
+                      cost={c.cost}
+                      complete={c.complete}
+                      onConfirm={() => advance("characteristic", c.advances + 1, c.key)}
+                    />
+                  ) : null}
+                </div>
                 <div className="value">{c.value}</div>
                 <div className="bonus">{c.bonus}</div>
               </button>
@@ -172,7 +187,9 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
           <Resource label={L("resilience", "sheet.resilience")} path="system.status.resilience.value" value={st.resilience?.value ?? 0} />
           <Resource label={L("resolve", "sheet.resolve")} path="system.status.resolve.value" value={st.resolve?.value ?? 0} />
           <Resource label={L("corruption", "sheet.corruption")} path="system.status.corruption.value" value={st.corruption?.value ?? 0} max={st.corruption?.max || undefined} />
-          <Resource label={L("sin", "sheet.sin")} path="system.status.sin.value" value={st.sin?.value ?? 0} />
+          {sheet.hasPrayers ? (
+            <Resource label={L("sin", "sheet.sin")} path="system.status.sin.value" value={st.sin?.value ?? 0} />
+          ) : null}
         </div>
       </Card>
 
@@ -181,8 +198,18 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
           <div className="kv"><span>{L("movement", "sheet.movement")}</span><b>{d.move?.value} / {d.move?.walk} / {d.move?.run}</b></div>
           <div className="kv"><span>{L("encumbrance", "sheet.encumbrance")}</span><b>{st.encumbrance?.current} / {st.encumbrance?.max}</b></div>
           <div className="kv"><span>{L("criticalWounds", "sheet.criticals")}</span><b>{st.criticalWounds?.value} / {st.criticalWounds?.max}</b></div>
-          <div className="kv"><span>{L("experience", "sheet.exp")}</span><b>{d.experience?.current} {t("sheet.expFree")} / {d.experience?.total}</b></div>
-          {d.statusStanding ? <div className="kv"><span>{L("status", "sheet.status")}</span><b>{d.statusText} {d.statusStanding}</b></div> : null}
+          <div className="kv">
+            <span>{L("experience", "sheet.exp")}</span>
+            {editing ? (
+              <span className="row" style={{ gap: "0.3rem" }}>
+                <NumEdit value={d.experience?.total ?? 0} width={72} onCommit={v => void edit("system.details.experience.total", v)} />
+                <NumEdit value={d.experience?.spent ?? 0} width={72} onCommit={v => void edit("system.details.experience.spent", v)} />
+              </span>
+            ) : (
+              <b>{d.experience?.current} {t("sheet.expFree")} / {d.experience?.total}</b>
+            )}
+          </div>
+          {statusLine ? <div className="kv"><span>{L("status", "sheet.status")}</span><b>{statusLine}</b></div> : null}
         </div>
       </Card>
 
@@ -256,6 +283,14 @@ function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
           })}
           right={
             <>
+              {skill.canAdvance ? (
+                <Advance
+                  name={skill.name}
+                  cost={skill.cost}
+                  complete={skill.complete}
+                  onConfirm={() => advance("skill", skill.advances + 1, undefined, skill.id)}
+                />
+              ) : null}
               <NumEdit value={skill.advances} width={46} onCommit={v => void advance("skill", v, undefined, skill.id)} />
               <span className="num">{skill.total}</span>
             </>
@@ -294,6 +329,8 @@ function TalentsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => 
   const t = useT();
   const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
+  const advanceTalent = (itemId: string, _name: string) =>
+    useStore.getState().advance("talent", 0, undefined, itemId);
   return (
     <>
       <Section title={L("traits", "sheet.traits")}>
@@ -310,9 +347,25 @@ function TalentsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => 
         )) : <Empty text={t("sheet.empty")} />}
       </Section>
 
+      <AspectGroups groups={sheet.aspects?.talents} sheet={sheet} />
+
       <Section title={L("talents", "sheet.tab.talents")}>
         {(sheet.talents ?? []).length ? sheet.talents.map((x: any) => (
-          <Row key={x.id} img={x.img} name={x.name} sub={x.tests} detail={x} right={<span className="num">{x.advances}{x.max ? ` / ${x.max}` : ""}</span>} />
+          <Row
+            key={x.id}
+            img={x.img}
+            name={x.name}
+            sub={x.tests}
+            detail={x}
+            right={
+              <>
+                <span className="num">{x.advances}{x.max ? ` / ${x.max}` : ""}</span>
+                {x.canAdvance ? (
+                  <Advance name={x.name} cost={x.cost} onConfirm={() => advanceTalent(x.id, x.name)} />
+                ) : null}
+              </>
+            }
+          />
         )) : <Empty text={t("sheet.empty")} />}
       </Section>
     </>
@@ -408,6 +461,8 @@ function CombatTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
       <Section title={t("sheet.notEquipped")}>
         {spare.length ? spare.map(weaponRow) : <Empty text={t("sheet.empty")} />}
       </Section>
+
+      <AspectGroups groups={sheet.aspects?.combat} sheet={sheet} />
     </>
   );
 }
@@ -471,6 +526,8 @@ function EffectsTab({ sheet }: { sheet: any }) {
           </Section>
         );
       })}
+
+      <AspectGroups groups={sheet.aspects?.effects} sheet={sheet} />
     </>
   );
 }
@@ -535,6 +592,8 @@ function MagicTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => vo
           {sheet.spells.cants.map((x: any) => spellRow(x, false))}
         </Section>
       ) : null}
+
+      <AspectGroups groups={sheet.aspects?.magic} sheet={sheet} />
     </>
   );
 }
@@ -743,5 +802,32 @@ function UseButton({ actorId, itemId }: { actorId: string; itemId: string }) {
     >
       {t("sheet.use")}
     </button>
+  );
+}
+
+/**
+ * Sections a module contributes. WFRP4e lets a module say which tab its items
+ * belong on and what to call them, so runes, techniques, chanties, cants and
+ * anything a third-party compendium adds land in the right place by themselves.
+ */
+function AspectGroups({ groups, sheet }: { groups?: any[]; sheet: any }) {
+  if (!groups?.length) return null;
+  return (
+    <>
+      {groups.map(group => (
+        <Section key={`${group.type}-${group.label}`} title={group.label}>
+          {group.items.map((item: any) => (
+            <Row
+              key={item.id}
+              img={item.img}
+              name={item.name}
+              sub={item.note}
+              detail={item}
+              right={item.usable ? <UseButton actorId={sheet.id} itemId={item.id} /> : undefined}
+            />
+          ))}
+        </Section>
+      ))}
+    </>
   );
 }

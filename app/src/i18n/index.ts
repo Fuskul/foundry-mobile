@@ -145,6 +145,12 @@ const ru: Dict = {
   "sheet.empty": "Пусто",
   "sheet.extras": "Прочее (из модулей)",
   "sheet.use": "Применить",
+  "sheet.advance": "Продвижение",
+  "sheet.advanceAsk": "Потратить {cost} XP на «{name}»?",
+  "sheet.advanceAskNoCost": "Продвинуть «{name}»?",
+  "sheet.spend": "Потратить",
+  "sheet.modules": "Модули мира",
+  "sheet.moduleTypes": "типы предметов",
   "sheet.damage": "Урон",
   "sheet.reach": "Досягаемость",
   "sheet.range": "Дальность",
@@ -226,6 +232,7 @@ const ru: Dict = {
   "status.connecting": "Подключение…",
   "status.offline": "Нет связи",
   "common.close": "Закрыть",
+  "common.cancel": "Отмена",
   "common.retry": "Повторить",
   "common.error": "Ошибка",
   "common.back": "Назад"
@@ -453,6 +460,7 @@ const en: Dict = {
   "status.connecting": "Connecting…",
   "status.offline": "Offline",
   "common.close": "Close",
+  "common.cancel": "Cancel",
   "common.retry": "Retry",
   "common.error": "Error",
   "common.back": "Back"

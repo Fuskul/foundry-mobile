@@ -64,6 +64,16 @@ export function App() {
         {s.tab === "settings" ? <Settings /> : null}
       </main>
 
+      {s.notices.length ? (
+        <div className="notices">
+          {s.notices.map(note => (
+            <button key={note.id} className={`notice-toast ${note.level}`} onClick={() => s.dismissNotice(note.id)}>
+              {note.text}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <nav className="tabbar">
         {TABS.map(tab => (
           <button

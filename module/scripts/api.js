@@ -127,6 +127,38 @@ export const HANDLERS = {
     });
   },
 
+  /**
+   * What is actually switched on in this world. The phone shows only content
+   * the active modules provide, so this doubles as a compatibility report and
+   * as an explanation of why something is or is not on the sheet.
+   */
+  async modules() {
+    const active = [];
+    for (const module of game.modules) {
+      if (!module.active) continue;
+      const types = module.documentTypes ?? module.flags?.documentTypes ?? {};
+      const systems = module.relationships?.systems;
+      const forSystem = !systems?.size || [...systems].some(s => (s.id ?? s) === game.system.id);
+      active.push({
+        id: module.id,
+        title: module.title,
+        version: module.version,
+        forSystem,
+        itemTypes: Object.keys(types.Item ?? {}),
+        actorTypes: Object.keys(types.Actor ?? {}),
+        packs: (module.packs ?? []).length
+      });
+    }
+    return {
+      system: { id: game.system.id, version: game.system.version },
+      foundry: game.version ?? game.data?.version,
+      // Every item type the world knows about is renderable, because the phone
+      // reads a module's items through the system's own placement API.
+      supportedTypes: Object.keys(CONFIG.Item?.dataModels ?? {}),
+      modules: active.sort((a, b) => a.title.localeCompare(b.title, game.i18n.lang))
+    };
+  },
+
   /** Use an item through the system's own item API (works for module types). */
   async useItem({ payload, user }) {
     const actor = requireActor(payload?.actorId, user);

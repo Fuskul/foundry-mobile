@@ -1,6 +1,6 @@
 import React from "react";
 import { useStore, conn } from "../store";
-import { useT, Card } from "../ui/common";
+import { useT, Card, Empty } from "../ui/common";
 import { LANGS } from "../i18n";
 import { Diagnostics } from "../ui/Diagnostics";
 
@@ -66,6 +66,33 @@ export function Settings() {
         ) : (
           <div className="error">{t("settings.bridgeMissing")}{s.bridgeError ? ` (${s.bridgeError})` : ""}</div>
         )}
+      </Card>
+
+      <Card title={t("sheet.modules")}>
+        {s.worldModules ? (
+          <div className="stack" style={{ gap: "0.1rem" }}>
+            <div className="small muted" style={{ marginBottom: "0.3rem" }}>
+              {s.worldModules.system?.id} {s.worldModules.system?.version} · Foundry {s.worldModules.foundry} ·{" "}
+              {s.worldModules.modules?.length ?? 0}
+            </div>
+            {(s.worldModules.modules ?? [])
+              .filter((m: any) => m.forSystem && (m.packs || m.itemTypes?.length))
+              .map((m: any) => (
+                <div key={m.id} className="modrow">
+                  <b>{m.title}</b>
+                  <span>
+                    {m.version}
+                    {m.itemTypes?.length ? ` · ${t("sheet.moduleTypes")}: ${m.itemTypes.join(", ")}` : ""}
+                  </span>
+                </div>
+              ))}
+          </div>
+        ) : (
+          <Empty text={t("app.loading")} />
+        )}
+        <button className="btn block" style={{ marginTop: "0.5rem" }} onClick={() => void s.loadModules()}>
+          {t("settings.recheck")}
+        </button>
       </Card>
 
       <Diagnostics />

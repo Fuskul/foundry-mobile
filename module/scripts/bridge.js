@@ -86,16 +86,53 @@ async function onSocket(message) {
   if (!handler) return reply(message, false, null, `Unknown action "${message.action}"`);
 
   debug("handling", message.action, "for", user.name, message.payload);
+  const collected = captureNotifications();
   try {
     const data = await handler({ payload: message.payload ?? {}, user });
-    reply(message, true, data ?? null, null);
+    reply(message, true, data ?? null, null, collected.stop());
   } catch (err) {
     error(message.action, err);
-    reply(message, false, null, err?.message ?? String(err));
+    reply(message, false, null, err?.message ?? String(err), collected.stop());
   }
 }
 
-function reply(request, ok, data, err) {
+/**
+ * A request from a phone runs in this browser, so anything the system reports
+ * — "no active encounter, Advantage unchanged", for instance — would pop up on
+ * the host's screen for something they did not do. Collect those instead and
+ * send them back to the phone that asked.
+ */
+function captureNotifications() {
+  const notes = [];
+  const target = ui?.notifications;
+  if (!target) return { stop: () => notes };
+
+  const original = {};
+  for (const level of ["notify", "info", "warn", "error"]) {
+    original[level] = target[level];
+    target[level] = function (messageText, options = {}) {
+      try {
+        const text = options?.localize ? game.i18n.localize(messageText) : String(messageText ?? "");
+        notes.push({ level: level === "notify" ? (options?.type ?? "info") : level, text });
+      } catch { /* never let logging break a request */ }
+      if (options?.permanent) return original[level].call(this, messageText, options);
+      return null;
+    };
+  }
+
+  let stopped = false;
+  return {
+    stop() {
+      if (!stopped) {
+        stopped = true;
+        for (const level of Object.keys(original)) target[level] = original[level];
+      }
+      return notes;
+    }
+  };
+}
+
+function reply(request, ok, data, err, notes) {
   game.socket.emit(SOCKET, {
     t: "res",
     id: request.id,
@@ -103,6 +140,7 @@ function reply(request, ok, data, err) {
     ok,
     data,
     error: err,
+    notes: notes ?? [],
     executor: { id: game.user.id, name: game.user.name }
   });
 }

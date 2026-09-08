@@ -49,16 +49,89 @@ async function summary(item, actor) {
 }
 
 /**
- * Item types the sheet already shows somewhere. Anything else — a vehicle part
- * from Sea of Claws, an arcane mark from Winds of Magic, a custom item from a
- * third-party compendium — is collected into "extras" so no module's content
- * silently disappears from the phone.
+ * Item types the sheet already shows somewhere. Anything else is either an
+ * "aspect" — the extension point WFRP4e gives modules, which says for itself
+ * which tab it belongs on — or an unknown type we still list rather than drop.
  */
 const SHOWN_TYPES = new Set([
   "skill", "talent", "trait", "career", "weapon", "armour", "ammunition",
   "trapping", "container", "money", "spell", "prayer", "critical", "injury",
   "disease", "psychology", "mutation", "extendedTest"
 ]);
+
+const PLACEMENTS = ["talents", "combat", "magic", "effects"];
+
+/**
+ * Items from modules, grouped the way the desktop sheet groups them: by the
+ * tab the item's own model asks for and then by its plural name. Cants from
+ * Archives III land in Magic, runes in Talents, and so on — without this bridge
+ * knowing anything about those modules.
+ */
+async function aspectGroups(actor) {
+  const groups = new Map();
+  const aspects = actor.itemTags?.aspect ?? actor.items.filter(i => i.system?.placement);
+
+  for (const item of aspects) {
+    const placement = PLACEMENTS.includes(item.system?.placement) ? item.system.placement : "talents";
+    const raw = item.system?.pluralLabel ?? item.system?.label ?? "";
+    const translated = raw ? game.i18n.localize(raw) : "";
+    const label = (translated && translated !== raw) ? translated : typeName(item.type);
+    const key = `${placement}::${label}`;
+    if (!groups.has(key)) groups.set(key, { placement, label, type: item.type, items: [] });
+    groups.get(key).items.push(item);
+  }
+
+  const out = { talents: [], combat: [], magic: [], effects: [] };
+  for (const group of groups.values()) {
+    out[group.placement].push({
+      type: group.type,
+      label: group.label,
+      items: await Promise.all(group.items
+        .sort((a, b) => a.name.localeCompare(b.name, game.i18n.lang))
+        .map(async i => ({
+          id: i.id,
+          name: i.name,
+          img: i.img,
+          type: i.type,
+          note: clean(loc(i.system?.listHeader) || ""),
+          usable: !!i.system?.usable,
+          ...(await summary(i, actor))
+        })))
+    });
+  }
+  return out;
+}
+
+/** Items of a type nothing claims — still shown, never silently dropped. */
+async function extraItems(actor) {
+  const known = new Set((actor.itemTags?.aspect ?? []).map(i => i.id));
+  const groups = new Map();
+  for (const i of actor.items) {
+    if (SHOWN_TYPES.has(i.type) || known.has(i.id)) continue;
+    if (!groups.has(i.type)) groups.set(i.type, []);
+    groups.get(i.type).push(i);
+  }
+
+  const out = [];
+  for (const [type, items] of groups) {
+    out.push({
+      type,
+      label: typeName(type),
+      items: await Promise.all(items
+        .sort((a, b) => a.name.localeCompare(b.name, game.i18n.lang))
+        .map(async i => ({
+          id: i.id,
+          name: i.name,
+          img: i.img,
+          type: i.type,
+          quantity: n(i.system?.quantity?.value, null),
+          usable: !!i.system?.usable,
+          ...(await summary(i, actor))
+        })))
+    });
+  }
+  return out.sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
+}
 
 /** The world's own name for an item type, or the raw type when it has none. */
 function typeName(type) {
@@ -302,7 +375,8 @@ export const wfrp4eAdapter = {
       conditions: await guard("conditions", () => conditionList(actor), []),
       experienceLog: await guard("experienceLog", () => experienceLog(actor), []),
       extras: await guard("extras", () => extraItems(actor), []),
-      hasSpells: !!actor.itemTypes.spell.length,
+      aspects: await guard("aspects", () => aspectGroups(actor), { talents: [], combat: [], magic: [], effects: [] }),
+      hasSpells: !!actor.itemTypes.spell.length || !!(actor.itemTags?.aspect ?? []).some(i => i.system?.placement === "magic"),
       hasPrayers: !!actor.itemTypes.prayer.length
     };
   },
@@ -413,6 +487,32 @@ export const wfrp4eAdapter = {
     const experience = system.details.experience;
     const update = { items: [] };
     let from, to, name, type, modifier;
+
+    if (kind === "talent") {
+      const talent = need(actor, itemId, "talent");
+      const advances = n(talent.system.Advances ?? talent.system.advances?.value);
+      const max = talent.system.Max;
+      if (max !== "-" && Number.isFinite(Number(max)) && advances >= Number(max)) {
+        throw new Error(game.i18n.format("ACTOR.AdvancementError", {
+          action: game.i18n.localize("ACTOR.ErrorImprove"),
+          item: talent.name
+        }));
+      }
+      const cost = (advances + 1) * 100;
+      const spent = n(experience.spent) + cost;
+      if (n(experience.total) - spent < 0) {
+        throw new Error(game.i18n.format("ACTOR.AdvancementError", {
+          action: game.i18n.localize("ACTOR.ErrorImprove"),
+          item: talent.name
+        }));
+      }
+      await actor.update({
+        "system.details.experience.spent": spent,
+        "system.details.experience.log": actor.system.addToExpLog(cost, talent.name, spent)
+      }, { skipExperienceChecks: true });
+      await actor.createEmbeddedDocuments("Item", [talent.toObject()]);
+      return { from: advances, to: advances + 1, cost, spent, name: talent.name };
+    }
 
     if (kind === "characteristic") {
       const characteristic = system.characteristics?.[key];
@@ -905,12 +1005,18 @@ function conditionList(actor) {
     .filter(c => c.id !== "dead")
     .map(c => {
       const effect = actor.effects.find(e => e.statuses?.has(c.id) || e.flags?.core?.statusId === c.id);
-      const numbered = !!game.wfrp4e?.config?.numberedConditions?.[c.id] || /bleeding|poisoned|ablaze|deafened|stunned|entangled|fatigued|blinded|broken/.test(c.id);
+      // Whether a condition stacks is declared by whoever defined it — the
+      // system for the core ten, a module for its own (Chilled, say).
+      const numbered = effect?.isNumberedCondition
+        ?? c.system?.condition?.numbered
+        ?? c.flags?.wfrp4e?.numbered
+        ?? (c.flags?.wfrp4e?.value != null)
+        ?? false;
       return {
         key: c.id,
         name: loc(c.name ?? c.label) || c.id,
         img: clean(c.img ?? c.icon),
-        numbered,
+        numbered: !!numbered,
         active: !!effect,
         value: effect ? n(effect.conditionValue ?? effect.flags?.wfrp4e?.value, 1) : 0,
         description: clean(game.wfrp4e?.config?.conditionDescriptions?.[c.id])

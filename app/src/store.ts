@@ -32,6 +32,8 @@ export interface ServerStatus2 {
   players?: number;
 }
 
+export interface Notice { id: number; level: string; text: string }
+
 export type Phase = "connect" | "app";
 export type Tab = "character" | "chat" | "settings";
 
@@ -62,6 +64,8 @@ interface State {
   bridgeInfo: BridgeInfo | null;
   bridgeError: string | null;
   systemConfig: any;
+  worldModules: any | null;
+  notices: Notice[];
 
   actors: any[];
   actorsLoading: boolean;
@@ -74,7 +78,9 @@ interface State {
   setLang: (lang: Lang) => void;
   setTheme: (theme: Theme) => void;
   edit: (path: string, value: unknown, itemId?: string, mode?: "set" | "toggle" | "step") => Promise<void>;
-  advance: (kind: "skill" | "characteristic", target: number, key?: string, itemId?: string) => Promise<void>;
+  advance: (kind: "skill" | "characteristic" | "talent", target: number, key?: string, itemId?: string) => Promise<void>;
+  dismissNotice: (id: number) => void;
+  loadModules: () => Promise<void>;
   toggleCondition: (key: string, remove: boolean) => Promise<void>;
   resync: () => Promise<void>;
   setTab: (tab: Tab) => void;
@@ -124,6 +130,8 @@ export const useStore = create<State>((set, get) => ({
   bridgeInfo: null,
   bridgeError: null,
   systemConfig: null,
+  worldModules: null,
+  notices: [],
 
   actors: [],
   actorsLoading: false,
@@ -168,6 +176,13 @@ export const useStore = create<State>((set, get) => ({
     } catch (err) {
       set({ sheetError: (err as Error).message });
     }
+  },
+
+  dismissNotice: id => set(s => ({ notices: s.notices.filter(nt => nt.id !== id) })),
+
+  async loadModules() {
+    try { set({ worldModules: await bridge.modules() }); }
+    catch (err) { conn.log("warn", `module list failed: ${(err as Error).message}`); }
   },
 
   async toggleCondition(key, remove) {
@@ -307,6 +322,7 @@ export const useStore = create<State>((set, get) => ({
       await persist(get());
       void get().checkBridge();
       void get().loadActors();
+      void get().loadModules();
     } catch (err) {
       set({ busy: null, error: (err as Error).message });
     }
@@ -462,3 +478,16 @@ function scheduleRefresh() {
     void useStore.getState().refreshSheet();
   }, 700);
 }
+
+let noticeId = 0;
+conn.on("bridge:notes", (notes: { level: string; text: string }[]) => {
+  const entries = (notes ?? [])
+    .filter(note => note?.text)
+    .map(note => ({ id: ++noticeId, level: note.level ?? "info", text: note.text }));
+  if (!entries.length) return;
+  useStore.setState(s => ({ notices: [...s.notices, ...entries].slice(-4) }));
+  setTimeout(() => {
+    const ids = new Set(entries.map(e => e.id));
+    useStore.setState(s => ({ notices: s.notices.filter(nt => !ids.has(nt.id)) }));
+  }, 6000);
+});

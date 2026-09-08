@@ -60,6 +60,9 @@ export class Bridge {
     if (!entry) return;
     clearTimeout(entry.timer);
     this.pending.delete(message.id);
+    // Anything the system announced while running our request belongs to this
+    // player, not to whoever's browser happened to execute it.
+    if (message.notes?.length) this.conn.emit("bridge:notes", message.notes);
     if (message.ok) entry.resolve(message.data);
     else entry.reject(new Error(message.error ?? "Bridge error"));
   }
@@ -124,7 +127,7 @@ export class Bridge {
   }
 
   /** Buy or refund advances; the module does the experience arithmetic. */
-  advance(actorId: string, kind: "skill" | "characteristic", target: number, key?: string, itemId?: string) {
+  advance(actorId: string, kind: "skill" | "characteristic" | "talent", target: number, key?: string, itemId?: string) {
     return this.request<any>("advance", { actorId, kind, target, key, itemId }, 20000);
   }
 
@@ -132,6 +135,9 @@ export class Bridge {
   opposed(actorId: string, messageId: string, optionId: string, fields: Record<string, unknown> = {}) {
     return this.request<any>("opposed", { actorId, messageId, optionId, fields }, 30000);
   }
+
+  /** Active modules in the world, with the item types each contributes. */
+  modules() { return this.request<any>("modules", {}, 15000); }
 
   /** Use an item through the system's own API — works for module item types. */
   useItem(actorId: string, itemId: string) {
