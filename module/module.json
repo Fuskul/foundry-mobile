@@ -2,7 +2,7 @@
   "id": "fvtt-mobile-bridge",
   "title": "Mobile Bridge (Foundry Mobile)",
   "description": "Bridge module for the Foundry Mobile companion app. Serves prepared character data and executes real system rolls on behalf of mobile clients. WFRP4e first, other systems via adapters.",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "authors": [
     {
       "name": "Foundry Mobile"

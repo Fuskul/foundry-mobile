@@ -1,7 +1,7 @@
 import React from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useStore } from "./store";
-import { useT, useSwipe } from "./ui/common";
+import { useT, useSwipe, usePullToRefresh, mergeTouch } from "./ui/common";
 import { Connect } from "./screens/Connect";
 import { Character } from "./screens/Character";
 import { Chat } from "./screens/Chat";
@@ -27,6 +27,15 @@ export function App() {
   };
   const swipe = useSwipe(() => step(1), () => step(-1));
 
+  // Pull down at the top to refresh whatever the current screen shows.
+  const refresh = React.useCallback(async () => {
+    if (s.phase === "connect") { await s.checkServers(); return; }
+    if (s.tab === "chat") { await s.resync(); return; }
+    if (s.tab === "settings") { await s.loadModules(); await s.checkBridge(); return; }
+    await s.refreshSheet();
+  }, [s.phase, s.tab]);
+  const ptr = usePullToRefresh(refresh);
+
   // A sleeping phone misses everything the socket would have delivered, so the
   // moment the app comes back we reopen the connection and refill the chat.
   React.useEffect(() => {
@@ -40,13 +49,42 @@ export function App() {
     };
   }, []);
 
+  // The Android back button should retrace steps inside the app, not drop the
+  // whole thing: walk left through the tabs first, and only leave from the
+  // first tab.
+  React.useEffect(() => {
+    const handle = CapacitorApp.addListener("backButton", () => {
+      const st = useStore.getState();
+      if (st.phase === "app" && st.tab !== TABS[0].id) {
+        const index = TABS.findIndex(tab => tab.id === st.tab);
+        st.setTab(TABS[Math.max(0, index - 1)].id);
+        return;
+      }
+      CapacitorApp.minimizeApp?.() ?? CapacitorApp.exitApp();
+    });
+    return () => { void handle.then(h => h.remove()); };
+  }, []);
+
+  const Indicator = (ptr.pull > 0 || ptr.refreshing) ? (
+    <div className="ptr" style={{ transform: `translateY(${Math.max(0, ptr.pull - 8)}px)` }}>
+      <span>
+        {ptr.refreshing
+          ? <><i className="spin">↻</i> {t("common.refreshing")}</>
+          : (ptr.pull >= ptr.threshold ? t("common.releaseRefresh") : t("common.pullRefresh"))}
+      </span>
+    </div>
+  ) : null;
+
   if (s.phase === "connect") {
     return (
       <div className="app">
         <header className="topbar">
           <h1 className="serif">{t("app.name")}</h1>
         </header>
-        <main className="content"><Connect /></main>
+        <main className="content" style={{ position: "relative" }} {...ptr.handlers}>
+          {Indicator}
+          <Connect />
+        </main>
       </div>
     );
   }
@@ -58,7 +96,8 @@ export function App() {
         <h1 className="serif">{s.sheet?.name ?? t("app.name")}</h1>
       </header>
 
-      <main className="content" {...swipe}>
+      <main className="content" style={{ position: "relative" }} {...mergeTouch(swipe, ptr.handlers)}>
+        {Indicator}
         {s.tab === "character" ? <Character /> : null}
         {s.tab === "chat" ? <Chat /> : null}
         {s.tab === "settings" ? <Settings /> : null}

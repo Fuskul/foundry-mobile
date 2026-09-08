@@ -1,7 +1,7 @@
 import React from "react";
 import { useStore, type ServerEntry } from "../store";
-import { useT, Field, Card, Modal } from "../ui/common";
-import { LANGS, translateError } from "../i18n";
+import { useT, Field, Card, Modal, ThemeToggle, LangToggle } from "../ui/common";
+import { translateError } from "../i18n";
 import { Diagnostics } from "../ui/Diagnostics";
 
 export function Connect() {
@@ -32,24 +32,8 @@ export function Connect() {
         <div className="row spread" style={{ marginBottom: "0.6rem" }}>
           <h2 style={{ margin: 0 }}>{t("connect.title")}</h2>
           <div className="row" style={{ gap: "0.4rem" }}>
-            <select
-              style={{ width: "auto" }}
-              aria-label={t("settings.theme")}
-              value={s.theme}
-              onChange={event => s.setTheme(event.target.value as any)}
-            >
-              <option value="dark">{t("settings.themeDark")}</option>
-              <option value="light">{t("settings.themeLight")}</option>
-              <option value="system">{t("settings.themeSystem")}</option>
-            </select>
-            <select
-              style={{ width: "auto" }}
-              aria-label={t("settings.language")}
-              value={s.lang}
-              onChange={event => s.setLang(event.target.value as any)}
-            >
-              {LANGS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
-            </select>
+            <ThemeToggle />
+            <LangToggle />
           </div>
         </div>
 
@@ -140,7 +124,14 @@ export function Connect() {
             {s.users.length ? (
               <select value={s.userId} onChange={event => s.setField("userId", event.target.value)}>
                 <option value="">{t("connect.selectUser")}</option>
-                {s.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {s.users.map(u => {
+                  const busy = s.activeUsers.includes(u.id);
+                  return (
+                    <option key={u.id} value={u.id} disabled={busy}>
+                      {u.name}{busy ? ` — ${t("connect.inGame")}` : ""}
+                    </option>
+                  );
+                })}
               </select>
             ) : (
               <div className="error" style={{ margin: 0 }}>
@@ -169,9 +160,12 @@ export function Connect() {
             <span>{t("connect.remember")}</span>
           </label>
 
+          {s.userId && s.activeUsers.includes(s.userId) ? (
+            <div className="notice small" style={{ marginTop: 0, marginBottom: "0.6rem" }}>{t("connect.inGameHint")}</div>
+          ) : null}
           <button
             className="btn primary block"
-            disabled={!s.userId || s.busy === "login"}
+            disabled={!s.userId || s.busy === "login" || s.activeUsers.includes(s.userId)}
             onClick={() => void s.login()}
           >
             {s.busy === "login" ? t("connect.loggingIn") : t("connect.login")}

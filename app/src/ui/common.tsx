@@ -73,7 +73,7 @@ export function useSwipe(onLeft: () => void, onRight: () => void) {
       const dx = touch.clientX - from.x;
       const dy = touch.clientY - from.y;
       if (Date.now() - from.t > 800) return;
-      if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+      if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
       native.__swipeHandled = true;
       if (dx < 0) onLeft(); else onRight();
     }
@@ -134,4 +134,92 @@ export function Html({ html }: { html: string }) {
 
 export function Empty({ text }: { text: string }) {
   return <p className="muted small" style={{ margin: "0.3rem 0" }}>{text}</p>;
+}
+
+
+/** Compact theme switch: one tap cycles dark → light → auto. */
+export function ThemeToggle() {
+  const t = useT();
+  const theme = useStore(s => s.theme);
+  const setTheme = useStore(s => s.setTheme);
+  const order = ["dark", "light", "system"] as const;
+  const icon = { dark: "\u{1F319}", light: "\u2600\uFE0F", system: "\u{1F313}" }[theme];
+  const name = { dark: t("settings.themeDark"), light: t("settings.themeLight"), system: t("settings.themeSystem") }[theme];
+  return (
+    <button
+      className="pictbtn"
+      aria-label={`${t("settings.theme")}: ${name}`}
+      title={`${t("settings.theme")}: ${name}`}
+      onClick={() => setTheme(order[(order.indexOf(theme) + 1) % order.length] as any)}
+    >
+      <span className="pict">{icon}</span>
+    </button>
+  );
+}
+
+/** Compact language switch: shows the current code, tap cycles to the next. */
+export function LangToggle() {
+  const t = useT();
+  const lang = useStore(s => s.lang);
+  const setLang = useStore(s => s.setLang);
+  const order = ["ru", "en"] as const;
+  return (
+    <button
+      className="pictbtn"
+      aria-label={`${t("settings.language")}: ${lang.toUpperCase()}`}
+      title={`${t("settings.language")}: ${lang.toUpperCase()}`}
+      onClick={() => setLang(order[(order.indexOf(lang as any) + 1) % order.length] as any)}
+    >
+      <span className="pict code">{lang.toUpperCase()}</span>
+    </button>
+  );
+}
+
+
+/**
+ * Pull-to-refresh for a scroll container. Only arms at the very top, only for a
+ * mostly-vertical downward drag, so it never fights normal scrolling or the
+ * sideways tab swipe. Returns handlers to spread on the scroller plus the
+ * current pull distance and a refreshing flag for the indicator.
+ */
+export function usePullToRefresh(onRefresh: () => Promise<void> | void) {
+  const startY = React.useRef<number | null>(null);
+  const [pull, setPull] = React.useState(0);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const THRESHOLD = 64;
+
+  const handlers = {
+    onTouchStart: (event: React.TouchEvent) => {
+      const el = event.currentTarget as HTMLElement;
+      startY.current = (event.touches.length === 1 && el.scrollTop <= 0) ? event.touches[0].clientY : null;
+    },
+    onTouchMove: (event: React.TouchEvent) => {
+      if (startY.current == null || refreshing) return;
+      const dy = event.touches[0].clientY - startY.current;
+      if (dy <= 0) { setPull(0); return; }
+      // Resist the pull so it feels elastic and tops out.
+      setPull(Math.min(THRESHOLD * 1.4, dy * 0.5));
+    },
+    onTouchEnd: async () => {
+      const armed = startY.current != null && pull >= THRESHOLD;
+      startY.current = null;
+      if (!armed) { setPull(0); return; }
+      setRefreshing(true);
+      setPull(THRESHOLD);
+      try { await onRefresh(); } finally { setRefreshing(false); setPull(0); }
+    }
+  };
+
+  return { handlers, pull, refreshing, threshold: THRESHOLD };
+}
+
+/** Combine several sets of touch handlers onto one element. */
+export function mergeTouch(...sets: Array<Record<string, any>>) {
+  const keys = ["onTouchStart", "onTouchMove", "onTouchEnd"];
+  const out: Record<string, (e: React.TouchEvent) => void> = {};
+  for (const k of keys) {
+    const fns = sets.map(s => s[k]).filter(Boolean);
+    if (fns.length) out[k] = (e: React.TouchEvent) => fns.forEach(fn => fn(e));
+  }
+  return out;
 }

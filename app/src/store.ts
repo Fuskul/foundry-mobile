@@ -59,6 +59,7 @@ interface State {
   servers: ServerEntry[];
   serverStatus: Record<string, ServerStatus2>;
   users: JoinUser[];
+  activeUsers: string[];
   usersError: string;
   worldTitle: string;
   userId: string;
@@ -113,6 +114,13 @@ interface State {
   sendChat: (text: string) => Promise<void>;
 }
 
+/** Keep the remembered user if still valid, else the first one not already in the game. */
+function pickUser(users: JoinUser[], active: string[], saved: string): string {
+  if (saved && users.some(u => u.id === saved)) return saved;
+  const free = users.find(u => !active.includes(u.id));
+  return (free ?? users[0])?.id ?? "";
+}
+
 const KEY = "foundry-mobile:settings";
 
 export const useStore = create<State>((set, get) => ({
@@ -125,6 +133,7 @@ export const useStore = create<State>((set, get) => ({
   servers: [],
   serverStatus: {},
   users: [],
+  activeUsers: [],
   usersError: "",
   worldTitle: "",
   userId: "",
@@ -310,10 +319,11 @@ export const useStore = create<State>((set, get) => ({
         servers,
         usersError: conn.joinError,
         worldTitle: conn.worldTitle,
+        activeUsers: conn.activeUsers,
         base: conn.base,
         busy: null,
         probed: true,
-        userId: users.some(u => u.id === saved) ? saved : (users[0]?.id ?? "")
+        userId: pickUser(users, conn.activeUsers, saved)
       });
       void persist(get());
     } catch (err) {

@@ -33,6 +33,7 @@ export class FoundryConnection {
   userName = "";
   joinError = "";
   worldTitle = "";
+  activeUsers: string[] = [];
   world: any = null;
   logs: LogLine[] = [];
 
@@ -135,6 +136,9 @@ export class FoundryConnection {
         this.log("info", `asking for the user list (${why}, attempt ${asked})`);
         socket.emit("getJoinData", (data: any) => {
           this.worldTitle = String(data?.world?.title ?? data?.world?.id ?? "");
+          // Ids the server reports as already in the game, so the app can grey
+          // them out — you cannot log in as a user who is already connected.
+          this.activeUsers = Array.isArray(data?.activeUsers) ? data.activeUsers.map(String) : [];
           const users: JoinUser[] = (data?.users ?? []).map((u: any) => ({
             id: u._id ?? u.id,
             name: u.name,

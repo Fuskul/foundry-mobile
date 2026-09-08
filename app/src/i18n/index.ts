@@ -42,6 +42,8 @@ const ru: Dict = {
   "connect.save": "Сохранить",
   "connect.stateOnline": "Мир запущен",
   "connect.stateOffline": "Недоступен",
+  "connect.inGame": "уже в игре",
+  "connect.inGameHint": "Этот игрок уже онлайн. Войти за него нельзя, пока он не выйдет.",
 
   "nav.character": "Персонаж",
   "nav.dice": "Кубы",
@@ -234,6 +236,9 @@ const ru: Dict = {
   "status.offline": "Нет связи",
   "common.close": "Закрыть",
   "common.cancel": "Отмена",
+  "common.refreshing": "Обновляем…",
+  "common.pullRefresh": "Потяните, чтобы обновить",
+  "common.releaseRefresh": "Отпустите, чтобы обновить",
   "common.retry": "Повторить",
   "common.error": "Ошибка",
   "common.back": "Назад"
@@ -279,6 +284,8 @@ const en: Dict = {
   "connect.save": "Save",
   "connect.stateOnline": "World running",
   "connect.stateOffline": "Unreachable",
+  "connect.inGame": "in game",
+  "connect.inGameHint": "This player is already online. You cannot log in as them until they leave.",
 
   "nav.character": "Character",
   "nav.dice": "Dice",
@@ -463,6 +470,9 @@ const en: Dict = {
   "status.offline": "Offline",
   "common.close": "Close",
   "common.cancel": "Cancel",
+  "common.refreshing": "Refreshing…",
+  "common.pullRefresh": "Pull to refresh",
+  "common.releaseRefresh": "Release to refresh",
   "common.retry": "Retry",
   "common.error": "Error",
   "common.back": "Back"
