@@ -95,15 +95,49 @@ export class FoundryConnection {
     return { status, users };
   }
 
-  /** Open a throwaway socket just long enough to read the user list. */
+  /**
+   * Open a socket before anyone has logged in and read the user list from it.
+   *
+   * Android does not hand us the session cookie (the native HTTP stack keeps it
+   * in a jar the WebSocket cannot see), so we take the session from the server
+   * instead: Foundry announces it on the socket right after connecting. That id
+   * is then good for the login request and for the real connection.
+   */
   private readJoinData(): Promise<JoinUser[]> {
     return new Promise(resolve => {
       let socket: Socket | null = null;
+      let done = false;
+      let asked = 0;
+
       const finish = (users: JoinUser[], note: string) => {
+        if (done) return;
+        done = true;
         this.joinError = users.length ? "" : note;
         this.log(users.length ? "info" : "warn", `getJoinData: ${note}`);
-        try { socket?.disconnect(); } catch { /* already gone */ }
+        clearTimeout(timer);
+        if (users.length && socket?.connected) {
+          // Keep it: the session already lives on this connection, so after the
+          // login we can simply ask it for the world instead of handshaking again.
+          this.adopt(socket);
+        } else {
+          try { socket?.disconnect(); } catch { /* already gone */ }
+        }
         resolve(users);
+      };
+
+      const ask = (why: string) => {
+        if (done || !socket?.connected) return;
+        asked += 1;
+        this.log("info", `asking for the user list (${why}, attempt ${asked})`);
+        socket.emit("getJoinData", (data: any) => {
+          const users: JoinUser[] = (data?.users ?? []).map((u: any) => ({
+            id: u._id ?? u.id,
+            name: u.name,
+            role: u.role
+          }));
+          if (users.length) finish(users, `${users.length} user(s)`);
+          else this.log("warn", `empty answer to attempt ${asked}`);
+        });
       };
 
       try {
@@ -112,24 +146,31 @@ export class FoundryConnection {
         return finish([], `could not open socket (${String(err)})`);
       }
 
-      const timer = setTimeout(() => finish([], "timed out"), 15000);
-
-      socket.on("connect_error", err => {
-        clearTimeout(timer);
-        finish([], `socket error: ${err?.message ?? err}`);
-      });
+      const timer = setTimeout(
+        () => finish([], asked ? "the server never answered" : "the socket never connected"),
+        20000
+      );
 
       socket.on("connect", () => {
-        socket!.emit("getJoinData", (data: any) => {
-          clearTimeout(timer);
-          const users: JoinUser[] = (data?.users ?? []).map((u: any) => ({
-            id: u._id ?? u.id,
-            name: u.name,
-            role: u.role
-          }));
-          finish(users, `${users.length} user(s)`);
-        });
+        this.log("info", `join socket connected via ${socket?.io?.engine?.transport?.name ?? "?"}`);
+        ask("on connect");
       });
+
+      socket.on("connect_error", err => finish([], `socket error: ${err?.message ?? err}`));
+
+      // The session announcement is what makes the server treat us as a client.
+      socket.on("session", (data: any) => {
+        this.log("info", `session announced: ${JSON.stringify(data ?? {}).slice(0, 140)}`);
+        if (data?.sessionId && data.sessionId !== this.session) {
+          this.session = data.sessionId;
+          this.log("info", `session from the socket: ${mask(this.session)}`);
+        }
+        if (data?.userId) this.userId = data.userId;
+        ask("after the session was announced");
+      });
+
+      // Some builds answer only once the handshake has fully settled.
+      setTimeout(() => ask("second try"), 2500);
     });
   }
 
@@ -212,7 +253,34 @@ export class FoundryConnection {
     });
   }
 
+  /** Attach the standard listeners and keep this socket as the live connection. */
+  private adopt(socket: Socket) {
+    this.socket = socket;
+    socket.removeAllListeners("connect_error");
+    socket.on("disconnect", reason => { this.log("warn", `socket disconnected: ${reason}`); this.emit("status"); });
+    socket.on("connect_error", err => { this.log("error", `socket error: ${err?.message ?? err}`); this.emit("status"); });
+    socket.on("modifyDocument", (response: any) => this.onModifyDocument(response));
+    socket.on("userActivity", (userId: string, activity: any) => this.emit("userActivity", userId, activity));
+    socket.onAny((event: string, ...args: any[]) => {
+      if (event === "modifyDocument" || event.startsWith("module.")) return;
+      this.log("info", `<- ${event} ${JSON.stringify(args).slice(0, 160)}`);
+    });
+    this.emit("status");
+  }
+
   async connect(): Promise<void> {
+    // The socket opened before login already carries our session; try it first.
+    if (this.socket?.connected) {
+      this.log("info", "reusing the connection opened before login");
+      try {
+        this.world = await this.requestWorld(10000);
+        this.emit("world", this.world);
+        return;
+      } catch (err) {
+        this.log("warn", `the existing connection did not answer (${String((err as Error).message ?? err)}), reconnecting`);
+      }
+    }
+
     await this.disconnect();
     this.log("info", `opening socket ${this.base}${this.routePrefix}/socket.io (session ${mask(this.session)})`);
 
@@ -243,9 +311,9 @@ export class FoundryConnection {
     this.emit("world", this.world);
   }
 
-  private requestWorld(): Promise<any> {
+  private requestWorld(timeoutMs = 30000): Promise<any> {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Timed out waiting for world data")), 30000);
+      const timer = setTimeout(() => reject(new Error("Timed out waiting for world data")), timeoutMs);
       this.socket!.emit("world", (data: any) => {
         clearTimeout(timer);
         const users = data?.users?.length ?? 0;
