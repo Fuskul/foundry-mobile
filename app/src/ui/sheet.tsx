@@ -1,12 +1,11 @@
 import React from "react";
 import { Html, useT, Modal } from "./common";
 import { useStore } from "../store";
+import { assetUrl } from "../foundry/http";
 
-/** Absolute URL for an image path coming from Foundry. */
+/** Absolute URL for an image path coming from Foundry, reachable from the phone. */
 export function imgUrl(path?: string): string {
-  if (!path) return "";
-  if (/^(https?:|data:)/i.test(path)) return path;
-  return `${useStore.getState().base}/${path.replace(/^\//, "")}`;
+  return assetUrl(path, useStore.getState().base);
 }
 
 export function Section(props: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
@@ -178,6 +177,47 @@ export function Advance(props: { name: string; cost?: number | null; complete?: 
           >
             {t("sheet.spend")}
           </button>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+
+/**
+ * A number field for advances that confirms before spending experience: typing
+ * a higher value buys several advances at once (the module works out and checks
+ * the cost); lowering it refunds without a prompt.
+ */
+export function AdvanceEdit(props: { value: number; name: string; width?: number; onAdvance: (target: number) => void }) {
+  const t = useT();
+  const [text, setText] = React.useState(String(props.value));
+  const [ask, setAsk] = React.useState<number | null>(null);
+  React.useEffect(() => setText(String(props.value)), [props.value]);
+
+  const commit = () => {
+    const next = Number(text);
+    if (!Number.isFinite(next) || next === props.value) { setText(String(props.value)); return; }
+    if (next > props.value) setAsk(next);
+    else props.onAdvance(next);
+  };
+
+  return (
+    <>
+      <input
+        className="numedit"
+        type="number"
+        inputMode="numeric"
+        style={{ width: props.width ?? 60 }}
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onBlur={commit}
+      />
+      <Modal open={ask != null} title={t("sheet.advance")} onClose={() => { setAsk(null); setText(String(props.value)); }}>
+        <p style={{ marginTop: 0 }}>{t("sheet.advanceBulk", { name: props.name, from: props.value, to: ask ?? 0 })}</p>
+        <div className="row" style={{ gap: "0.5rem" }}>
+          <button className="btn ghost grow" onClick={() => { setAsk(null); setText(String(props.value)); }}>{t("common.cancel")}</button>
+          <button className="btn primary grow" onClick={() => { const v = ask!; setAsk(null); props.onAdvance(v); }}>{t("sheet.spend")}</button>
         </div>
       </Modal>
     </>

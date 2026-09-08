@@ -6,6 +6,7 @@ import { Connect } from "./screens/Connect";
 import { Character } from "./screens/Character";
 import { Chat } from "./screens/Chat";
 import { Settings } from "./screens/Settings";
+import { CombatBar } from "./screens/Combat";
 
 const TABS = [
   { id: "character", glyph: "🛡" },
@@ -96,7 +97,9 @@ export function App() {
         <h1 className="serif">{s.sheet?.name ?? t("app.name")}</h1>
       </header>
 
-      <main className="content" style={{ position: "relative" }} {...mergeTouch(swipe, ptr.handlers)}>
+      <CombatBar />
+
+      <main className={`content ${s.combat ? "with-combat" : ""}`} style={{ position: "relative" }} {...mergeTouch(swipe, ptr.handlers)}>
         {Indicator}
         {s.tab === "character" ? <Character /> : null}
         {s.tab === "chat" ? <Chat /> : null}

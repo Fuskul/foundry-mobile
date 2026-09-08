@@ -33,6 +33,12 @@ Requires **Foundry VTT 14.367 or newer**. Tested against **wfrp4e 9.6.4**.
   presets (d4–d100) with visibility modes, and card buttons pressed from the phone.
 - **Opposed tests.** The defence options a card offers are shown by name, and the defender's
   roll is made on the phone's behalf rather than as a dialog on the host's screen.
+- **Combat.** A live turn tracker with round, initiative order, a "your turn" cue, rolling
+  your own initiative, GM turn controls, and picking a target so a phone-initiated attack
+  opens the opposed test against it.
+- **Effects.** Active effects can be switched on and off from the phone, with descriptions.
+- **Works when the host blinks.** The last sheet is cached and shown read-only when no
+  browser is hosting, and the app reconnects and refills on wake.
 - **Module content.** Items that modules add — cants (Archives III), runes (Dwarfs),
   techniques (High Elves), chanties (Sea of Claws), anything from a third-party compendium —
   appear in the tab and under the name their own module chose, read through WFRP4e's
@@ -123,14 +129,27 @@ Write an adapter in `module/scripts/systems/` exposing `matches()`, `config()`,
 The app renders whatever the adapter returns; `generic.js` is the fallback for systems with
 no adapter yet.
 
-## Security note
+## Security
 
 Foundry relays module socket events without an authenticated sender, so the bridge trusts
-the `from` field in a request. Everyone who can send that event is already an authenticated
-user of your world, but a malicious *player* could name another user's id. Ownership is
-still enforced against that claimed user, and the GM can turn the bridge or rolls off in
-module settings. Do not enable this on a world with untrusted players until request signing
-lands — see [ROADMAP.md](ROADMAP.md).
+the `from` field in a request. True cryptographic signing is impossible from a client-only
+module (Foundry gives modules no server-side hook), so the bridge instead enforces a set of
+GM-controlled limits (module settings):
+
+- **Ownership** — a request may only touch actors the claimed user owns (or their assigned
+  character); observers get read-only data at most.
+- **Assigned character only** — optionally restrict a player's phone to their assigned
+  character, ignoring any other actors they happen to own.
+- **Allowlist** — optionally name exactly which users may drive phones; everyone else is
+  refused.
+- **Rate limit** — cap how many changing actions a phone may make in ten seconds.
+- **Audit** — optionally whisper the GMs a line whenever a phone changes something, so remote
+  play is visible.
+- The bridge, rolls, and edits can each be switched off entirely.
+
+The residual risk is a malicious *player* naming another user's id to act as them; the
+allowlist and assigned-character lock reduce it, and the audit trail surfaces it. Treat the
+app like any other trust you extend to the people already in your world.
 
 ## Roadmap
 

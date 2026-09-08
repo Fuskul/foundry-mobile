@@ -52,6 +52,8 @@ export function canUseActor(user, actor) {
   if (user.isGM) return true;
   // The character a user is assigned to is always theirs to use.
   if (user.character?.id === actor.id) return true;
+  // When the GM locks phones to the assigned character, nothing else counts.
+  try { if (game.settings.get(MODULE_ID, "assignedOnly")) return false; } catch { /* setting may be missing */ }
   if (!game.settings.get(MODULE_ID, "requireOwnership")) return actor.testUserPermission(user, "OBSERVER");
   return actor.testUserPermission(user, "OWNER");
 }

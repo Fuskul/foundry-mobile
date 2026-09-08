@@ -94,3 +94,30 @@ export async function readCookies(url: string): Promise<Record<string, string>> 
     return {};
   }
 }
+
+/**
+ * Resolve an asset path from a Foundry chat card or sheet to a URL the phone
+ * can actually load. Relative paths hang off the connected server, and — the
+ * common breakage — an absolute URL the desktop stored pointing at localhost
+ * or a LAN-local host (which mean "this device" to the phone) is moved onto the
+ * server we are actually talking to. Public URLs and data:/blob: are untouched.
+ */
+export function assetUrl(path: string | undefined, base: string): string {
+  if (!path) return "";
+  if (/^(data:|blob:)/i.test(path)) return path;
+  try {
+    const b = new URL(base);
+    const u = new URL(path, base.replace(/\/$/, "") + "/");
+    if (u.origin !== b.origin && isLocalHost(u.hostname)) {
+      u.protocol = b.protocol;
+      u.host = b.host;
+    }
+    return u.href;
+  } catch {
+    return `${base.replace(/\/$/, "")}/${String(path).replace(/^\.?\//, "")}`;
+  }
+}
+
+function isLocalHost(host: string): boolean {
+  return /^(localhost|0\.0\.0\.0|127\.|\[?::1\]?|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(host);
+}

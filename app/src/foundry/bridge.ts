@@ -109,9 +109,12 @@ export class Bridge {
   sheet(actorId: string) { return this.request<any>("sheet", { actorId }, 20000); }
   config() { return this.request<any>("config"); }
   combat() { return this.request<any>("combat"); }
+  combatAction(action: string, combatantId?: string) {
+    return this.request<any>("combatAction", { action, combatantId }, 20000);
+  }
 
-  roll(actorId: string, kind: string, key: string, fields: Record<string, unknown> = {}, skipDialog = true) {
-    return this.request<any>("roll", { actorId, kind, key, fields, skipDialog }, 30000);
+  roll(actorId: string, kind: string, key: string, fields: Record<string, unknown> = {}, skipDialog = true, targets?: string[]) {
+    return this.request<any>("roll", { actorId, kind, key, fields, skipDialog, targets }, 30000);
   }
 
   edit(actorId: string, path: string, value: unknown, itemId?: string, mode: "set" | "toggle" | "step" = "set") {
@@ -120,6 +123,10 @@ export class Bridge {
 
   condition(actorId: string, key: string, remove = false) {
     return this.request<any>("condition", { actorId, key, remove });
+  }
+
+  effect(actorId: string, effectId: string, disabled: boolean) {
+    return this.request<any>("effect", { actorId, effectId, disabled });
   }
 
   chatlog(since = 0, limit = 60) {

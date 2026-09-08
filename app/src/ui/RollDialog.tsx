@@ -16,6 +16,8 @@ const MOD_PRESETS = [-30, -20, -10, 0, 10, 20, 30];
 export function RollDialog({ target, onClose }: { target: RollTarget | null; onClose: () => void }) {
   const t = useT();
   const config = useStore(s => s.systemConfig);
+  const combat = useStore(s => s.combat);
+  const targetId = useStore(s => s.targetId);
   const [modifier, setModifier] = React.useState(0);
   const [difficulty, setDifficulty] = React.useState("challenging");
   const [slBonus, setSlBonus] = React.useState(0);
@@ -45,9 +47,11 @@ export function RollDialog({ target, onClose }: { target: RollTarget | null; onC
     if (!target) return;
     setBusy(true); setError(null);
     try {
+      const attacks = ["weapon", "trait", "cast", "channel", "prayer"].includes(target.kind);
+      const targets = attacks && targetId ? [targetId] : undefined;
       const data = await bridge.roll(target.actorId, target.kind, target.key, {
         modifier, difficulty, slBonus, successBonus, rollMode
-      });
+      }, true, targets);
       if (data?.cancelled) setError(t("roll.cancelled"));
       else setResult(data);
     } catch (err) {
@@ -62,7 +66,12 @@ export function RollDialog({ target, onClose }: { target: RollTarget | null; onC
       {target ? (
         <>
           <h2 className="serif">{target.name}</h2>
-          {target.subtitle ? <p className="small muted" style={{ margin: "0 0 0.6rem" }}>{target.subtitle}</p> : null}
+          {target.subtitle ? <p className="small muted" style={{ margin: "0 0 0.3rem" }}>{target.subtitle}</p> : null}
+          {["weapon","trait","cast","channel","prayer"].includes(target.kind) && targetId ? (
+            <p className="small" style={{ margin: "0 0 0.6rem", color: "var(--gold)" }}>
+              → {combat?.combatants?.find((c:any)=>c.id===targetId)?.name ?? t("combat.target")}
+            </p>
+          ) : null}
 
           {result ? (
             <ResultView result={result} onAgain={() => setResult(null)} onClose={onClose} />

@@ -22,5 +22,16 @@
   "FVTTMB.Setting.Verbose": "Verbose logging",
   "FVTTMB.Setting.VerboseHint": "Write every bridge request to the browser console.",
   "FVTTMB.Setting.AllowEdits": "Allow changes from the app",
-  "FVTTMB.Setting.AllowEditsHint": "When off, phones can roll and read the sheet but cannot change anything on it."
+  "FVTTMB.Setting.AllowEditsHint": "When off, phones can roll and read the sheet but cannot change anything on it.",
+  "FVTTMB.Setting.Allowlist": "Allowed phone users",
+  "FVTTMB.Setting.AllowlistHint": "Only these users may use the app (names or ids, comma-separated). Leave empty to allow everyone.",
+  "FVTTMB.Setting.AssignedOnly": "Assigned character only",
+  "FVTTMB.Setting.AssignedOnlyHint": "Players may act only for the character assigned to them, even if they own other actors. GMs are unaffected.",
+  "FVTTMB.Setting.RateLimit": "Rate limit (actions / 10s)",
+  "FVTTMB.Setting.RateLimitHint": "Most changing actions a phone may make in 10 seconds. 0 turns the limit off.",
+  "FVTTMB.Setting.Audit": "Announce phone actions to GMs",
+  "FVTTMB.Setting.AuditHint": "Whisper a GM-only line whenever a phone changes something, so you can see what players do remotely.",
+  "FVTTMB.Audit.Line": "{user} (phone): {action}{on}",
+  "FVTTMB.Reject.NotAllowed": "Your account is not on this world's allowlist for the mobile app.",
+  "FVTTMB.Reject.RateLimited": "Too many actions from the app in a short time — please slow down."
 }

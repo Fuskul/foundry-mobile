@@ -168,6 +168,15 @@ export const HANDLERS = {
     return safe(await adapter.useItem(actor, { itemId: payload?.itemId }));
   },
 
+  /** Enable or disable one of the actor's active effects. */
+  async effect({ payload, user }) {
+    const actor = requireActor(payload?.actorId, user);
+    if (!game.settings.get(MODULE_ID, "allowEdits")) throw new Error("Editing is disabled by the GM");
+    const adapter = getAdapter();
+    if (!adapter.setEffect) throw new Error("This system adapter cannot toggle effects");
+    return safe(await adapter.setEffect(actor, { effectId: payload?.effectId, disabled: payload?.disabled }));
+  },
+
   /** Add or remove a condition. */
   async condition({ payload, user }) {
     const actor = requireActor(payload?.actorId, user);
@@ -265,26 +274,19 @@ export const HANDLERS = {
   },
 
   /** Current combat, if any. */
-  async combat() {
-    const combat = game.combat;
-    if (!combat) return null;
-    return safe({
-      id: combat.id,
-      round: combat.round,
-      turn: combat.turn,
-      started: combat.started,
-      current: combat.combatant?.id ?? null,
-      combatants: combat.turns.map(c => ({
-        id: c.id,
-        name: c.name,
-        img: c.img,
-        actorId: c.actorId,
-        initiative: c.initiative,
-        defeated: c.isDefeated,
-        hidden: c.hidden,
-        isOwner: c.isOwner
-      }))
-    });
+  async combat({ user }) {
+    const adapter = getAdapter();
+    return safe(adapter.combat ? adapter.combat(user) : null);
+  },
+
+  /** Roll initiative for your own combatant, or (GM) drive the turn order. */
+  async combatAction({ payload, user }) {
+    const adapter = getAdapter();
+    if (!adapter.combatAction) throw new Error("This system adapter has no combat controls");
+    return safe(await adapter.combatAction(user, {
+      action: payload?.action,
+      combatantId: payload?.combatantId
+    }));
   }
 };
 

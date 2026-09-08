@@ -358,6 +358,11 @@ export const wfrp4eAdapter = {
       // from one made at the table.
       appendTitle: payload?.appendTitle ?? ""
     };
+    // A phone can name its targets (combatants/tokens) so an attack opens the
+    // opposed test against them — the browser doing the roll has no targets of
+    // its own that belong to this player.
+    const targets = resolveTargets(payload?.targets);
+    if (targets.length) context.targets = targets;
     const options = { skipTargets: payload?.skipTargets === true };
 
     let test;
@@ -582,6 +587,80 @@ export const wfrp4eAdapter = {
     if (remove) await actor.removeCondition(key);
     else await actor.addCondition(key);
     return { key, remove: !!remove };
+  },
+
+  /** The current encounter, told from this phone-user's point of view. */
+  combat(user) {
+    const combat = game.combat;
+    if (!combat) return null;
+    const owns = c => c.actor ? c.actor.testUserPermission(user, "OBSERVER") || user.character?.id === c.actorId : false;
+    const combatants = combat.turns.map(c => {
+      const mine = owns(c);
+      const w = c.actor?.system?.status?.wounds;
+      return {
+        id: c.id,
+        name: c.hidden && !user.isGM ? "?" : c.name,
+        img: c.hidden && !user.isGM ? "" : c.img,
+        actorId: c.actorId,
+        tokenId: c.tokenId,
+        sceneId: c.sceneId ?? combat.scene?.id ?? null,
+        initiative: c.initiative,
+        active: c.id === combat.combatant?.id,
+        defeated: c.isDefeated,
+        hidden: c.hidden,
+        mine,
+        wounds: (mine || user.isGM) && w ? { value: n(w.value), max: n(w.max) } : null
+      };
+    }).filter(c => user.isGM || !c.hidden);
+    const current = combat.combatant;
+    return {
+      id: combat.id,
+      round: combat.round,
+      started: combat.started,
+      currentId: current?.id ?? null,
+      currentName: current ? (current.hidden && !user.isGM ? "?" : current.name) : null,
+      yourTurn: !!current && owns(current),
+      isGM: user.isGM,
+      combatants
+    };
+  },
+
+  /**
+   * Combat controls a phone may use. A player can roll initiative for their own
+   * combatant; turn and round advancement stays with the GM.
+   */
+  async combatAction(user, { action, combatantId }) {
+    const combat = game.combat;
+    if (!combat) throw new Error("There is no active combat");
+
+    if (action === "rollInitiative") {
+      const own = combat.combatants.filter(c =>
+        (combatantId ? c.id === combatantId : true) &&
+        (user.isGM || c.actor?.testUserPermission(user, "OWNER") || user.character?.id === c.actorId));
+      const ids = own.filter(c => c.initiative == null).map(c => c.id);
+      if (!ids.length) throw new Error("Nothing of yours to roll initiative for");
+      await combat.rollInitiative(ids);
+      return { action, rolled: ids.length };
+    }
+
+    if (!user.isGM) throw new Error("Only the GM can control the turn order");
+    switch (action) {
+      case "next": await combat.nextTurn(); break;
+      case "previous": await combat.previousTurn(); break;
+      case "nextRound": await combat.nextRound(); break;
+      case "begin": await combat.startCombat(); break;
+      case "end": await combat.endCombat(); break;
+      default: throw new Error(`Unknown combat action: ${action}`);
+    }
+    return { action, round: combat.round, turn: combat.turn };
+  },
+
+  /** Turn one of the actor's own active effects on or off. */
+  async setEffect(actor, { effectId, disabled }) {
+    const effect = actor.effects.get(effectId);
+    if (!effect) throw new Error("Effect not found on this actor");
+    await effect.update({ disabled: !!disabled });
+    return { effectId, disabled: !!disabled };
   }
 };
 
@@ -611,6 +690,29 @@ async function guard(label, build, fallback) {
     console.warn(`[MobileBridge] sheet section "${label}" failed:`, err);
     return fallback;
   }
+}
+
+/**
+ * Turn target references from a phone — combatant ids or {sceneId, tokenId} —
+ * into the speaker data WFRP4e expects in a test's context.targets, so an
+ * attack opens the opposed test against them.
+ */
+function resolveTargets(refs) {
+  const list = Array.isArray(refs) ? refs : (refs ? [refs] : []);
+  const out = [];
+  for (const ref of list) {
+    let token = null;
+    if (typeof ref === "string" && game.combat) {
+      const c = game.combat.combatants.get(ref);
+      token = c?.token ?? null;
+    }
+    if (!token && ref && ref.tokenId) {
+      const scene = game.scenes.get(ref.sceneId) ?? game.canvas?.scene;
+      token = scene?.tokens?.get(ref.tokenId) ?? null;
+    }
+    if (token?.actor) out.push(token.actor.speakerData(token));
+  }
+  return out;
 }
 
 function need(actor, id, type) {

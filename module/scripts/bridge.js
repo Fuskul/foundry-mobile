@@ -40,6 +40,24 @@ Hooks.once("init", () => {
     onChange: setVerbose
   });
 
+  // --- Safety controls for a world with players you don't fully trust ---
+  s("allowlist", {
+    name: "FVTTMB.Setting.Allowlist", hint: "FVTTMB.Setting.AllowlistHint",
+    scope: "world", config: true, type: String, default: ""
+  });
+  s("assignedOnly", {
+    name: "FVTTMB.Setting.AssignedOnly", hint: "FVTTMB.Setting.AssignedOnlyHint",
+    scope: "world", config: true, type: Boolean, default: false
+  });
+  s("rateLimit", {
+    name: "FVTTMB.Setting.RateLimit", hint: "FVTTMB.Setting.RateLimitHint",
+    scope: "world", config: true, type: Number, default: 0
+  });
+  s("audit", {
+    name: "FVTTMB.Setting.Audit", hint: "FVTTMB.Setting.AuditHint",
+    scope: "world", config: true, type: Boolean, default: false
+  });
+
   // The connect-dialog menu is a convenience; if subclassing the core app class
   // ever fails on a new Foundry version it must not take the settings section
   // (and therefore the whole module's controls) down with it.
@@ -116,15 +134,74 @@ async function onSocket(message) {
   const handler = HANDLERS[message.action];
   if (!handler) return reply(message, false, null, `Unknown action "${message.action}"`);
 
+  // Allowlist: if the GM has named who may use phones, everyone else is refused.
+  if (!onAllowlist(user)) {
+    return reply(message, false, null, game.i18n.localize("FVTTMB.Reject.NotAllowed"));
+  }
+  // Rate limit: cap changing actions per user over a short window.
+  if (MUTATING.has(message.action) && rateLimited(user.id)) {
+    return reply(message, false, null, game.i18n.localize("FVTTMB.Reject.RateLimited"));
+  }
+
   debug("handling", message.action, "for", user.name, message.payload);
   const collected = captureNotifications();
   try {
     const data = await handler({ payload: message.payload ?? {}, user });
+    if (MUTATING.has(message.action)) auditAction(user, message.action, message.payload);
     reply(message, true, data ?? null, null, collected.stop());
   } catch (err) {
     error(message.action, err);
     reply(message, false, null, err?.message ?? String(err), collected.stop());
   }
+}
+
+/** Actions that change the world (as opposed to reads); these are the guarded ones. */
+const MUTATING = new Set([
+  "edit", "advance", "condition", "effect", "roll", "opposed", "useItem",
+  "cardAction", "resource", "chat", "combatAction"
+]);
+
+function onAllowlist(user) {
+  let raw = "";
+  try { raw = String(game.settings.get(MODULE_ID, "allowlist") ?? "").trim(); } catch { return true; }
+  if (!raw) return true;
+  const allowed = raw.split(/[,;\n]/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  return allowed.includes(user.id.toLowerCase()) || allowed.includes(user.name.toLowerCase());
+}
+
+const rateHits = new Map();
+function rateLimited(userId) {
+  let limit = 0;
+  try { limit = Number(game.settings.get(MODULE_ID, "rateLimit")) || 0; } catch { limit = 0; }
+  if (limit <= 0) return false;
+  const now = Date.now();
+  const hits = (rateHits.get(userId) ?? []).filter(t => now - t < 10000);
+  if (hits.length >= limit) { rateHits.set(userId, hits); return true; }
+  hits.push(now);
+  rateHits.set(userId, hits);
+  return false;
+}
+
+/** Tell the GMs, quietly, what a phone just changed — an audit trail they can see. */
+function auditAction(user, action, payload) {
+  let on = false;
+  try { on = game.settings.get(MODULE_ID, "audit"); } catch { on = false; }
+  if (!on) return;
+  const actor = payload?.actorId ? game.actors.get(payload.actorId) : null;
+  const line = game.i18n.format("FVTTMB.Audit.Line", {
+    user: user.name,
+    action,
+    on: actor ? ` — ${actor.name}` : ""
+  });
+  const gmIds = game.users.filter(u => u.isGM && u.active).map(u => u.id);
+  if (!gmIds.length) return;
+  try {
+    ChatMessage.create({
+      content: `<span class="fvttmb-audit">📱 ${line}</span>`,
+      whisper: gmIds,
+      speaker: { alias: "Mobile Bridge" }
+    });
+  } catch (err) { console.warn("[MobileBridge] audit failed:", err); }
 }
 
 /**
@@ -205,6 +282,16 @@ function registerChangeBroadcast() {
   Hooks.on("createActiveEffect", e => touch(e.parent?.documentName === "Actor" ? e.parent : e.parent?.parent));
   Hooks.on("updateActiveEffect", e => touch(e.parent?.documentName === "Actor" ? e.parent : e.parent?.parent));
   Hooks.on("deleteActiveEffect", e => touch(e.parent?.documentName === "Actor" ? e.parent : e.parent?.parent));
+
+  // The whole encounter changes for everyone at once, so combat updates are
+  // broadcast as a single, plain "combatChanged" ping the phones react to.
+  const combatPing = () => {
+    if (game.settings.get(MODULE_ID, "executorMode") === EXECUTOR_MODE.NEVER) return;
+    game.socket.emit(SOCKET, { t: "evt", event: "combatChanged" });
+  };
+  for (const hook of ["createCombat", "updateCombat", "deleteCombat", "createCombatant", "updateCombatant", "deleteCombatant"]) {
+    Hooks.on(hook, combatPing);
+  }
 }
 
 /* -------------------------------------------------------------- scene button */

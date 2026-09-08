@@ -79,12 +79,15 @@ interface State {
   systemConfig: any;
   worldModules: any | null;
   notices: Notice[];
+  combat: any | null;
+  targetId: string | null;
 
   actors: any[];
   actorsLoading: boolean;
   actorScope: "mine" | "characters";
   actorId: string | null;
   sheet: any | null;
+  sheetStale: boolean;
   sheetError: string | null;
   chat: ChatEntry[];
 
@@ -94,6 +97,10 @@ interface State {
   advance: (kind: "skill" | "characteristic" | "talent", target: number, key?: string, itemId?: string) => Promise<void>;
   dismissNotice: (id: number) => void;
   loadModules: () => Promise<void>;
+  loadCombat: () => Promise<void>;
+  combatAction: (action: string, combatantId?: string) => Promise<void>;
+  setTarget: (combatantId: string | null) => void;
+  toggleEffect: (effectId: string, disabled: boolean) => Promise<void>;
   toggleCondition: (key: string, remove: boolean) => Promise<void>;
   resync: () => Promise<void>;
   setTab: (tab: Tab) => void;
@@ -153,12 +160,15 @@ export const useStore = create<State>((set, get) => ({
   systemConfig: null,
   worldModules: null,
   notices: [],
+  combat: null,
+  targetId: null,
 
   actors: [],
   actorsLoading: false,
   actorScope: "mine",
   actorId: null,
   sheet: null,
+  sheetStale: false,
   sheetError: null,
   chat: [],
 
@@ -204,6 +214,27 @@ export const useStore = create<State>((set, get) => ({
   async loadModules() {
     try { set({ worldModules: await bridge.modules() }); }
     catch (err) { conn.log("warn", `module list failed: ${(err as Error).message}`); }
+  },
+
+  async loadCombat() {
+    try {
+      const combat = await bridge.combat();
+      set(s => ({ combat, targetId: combat?.combatants?.some((c: any) => c.id === s.targetId) ? s.targetId : null }));
+    } catch (err) { conn.log("warn", `combat load failed: ${(err as Error).message}`); }
+  },
+
+  async combatAction(action, combatantId) {
+    try { await bridge.combatAction(action, combatantId); await get().loadCombat(); }
+    catch (err) { set({ sheetError: (err as Error).message }); }
+  },
+
+  setTarget: combatantId => set(s => ({ targetId: s.targetId === combatantId ? null : combatantId })),
+
+  async toggleEffect(effectId, disabled) {
+    const actorId = get().actorId;
+    if (!actorId) return;
+    try { await bridge.effect(actorId, effectId, disabled); await get().refreshSheet(); }
+    catch (err) { set({ sheetError: (err as Error).message }); }
   },
 
   async toggleCondition(key, remove) {
@@ -345,6 +376,7 @@ export const useStore = create<State>((set, get) => ({
       void get().checkBridge();
       void get().loadActors();
       void get().loadModules();
+      void get().loadCombat();
     } catch (err) {
       set({ busy: null, error: (err as Error).message });
     }
@@ -382,19 +414,28 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async openActor(actorId) {
-    set({ actorId, sheet: null, sheetError: null });
+    const cached = await readSheetCache(actorId);
+    set({ actorId, sheet: cached, sheetStale: !!cached, sheetError: null });
     try {
-      set({ sheet: await bridge.sheet(actorId) });
+      const sheet = await bridge.sheet(actorId);
+      set({ sheet, sheetStale: false, sheetError: null });
+      void writeSheetCache(actorId, sheet);
     } catch (err) {
-      set({ sheetError: (err as Error).message });
+      // Keep whatever we last knew, marked read-only, instead of a blank screen.
+      set({ sheetStale: !!get().sheet, sheetError: get().sheet ? null : bridgeMessage(err, get().lang) });
     }
   },
 
   async refreshSheet() {
     const id = get().actorId;
     if (!id) return;
-    try { set({ sheet: await bridge.sheet(id), sheetError: null }); }
-    catch (err) { set({ sheetError: (err as Error).message }); }
+    try {
+      const sheet = await bridge.sheet(id);
+      set({ sheet, sheetStale: false, sheetError: null });
+      void writeSheetCache(id, sheet);
+    } catch (err) {
+      set({ sheetStale: !!get().sheet, sheetError: get().sheet ? null : bridgeMessage(err, get().lang) });
+    }
   },
 
   async sendChat(text) {
@@ -404,11 +445,23 @@ export const useStore = create<State>((set, get) => ({
   }
 }));
 
+async function writeSheetCache(actorId: string, sheet: any) {
+  try { await Preferences.set({ key: `foundry-mobile:sheet:${actorId}`, value: JSON.stringify(sheet) }); } catch { /* full storage is fine to ignore */ }
+}
+
+async function readSheetCache(actorId: string): Promise<any | null> {
+  try {
+    const { value } = await Preferences.get({ key: `foundry-mobile:sheet:${actorId}` });
+    return value ? JSON.parse(value) : null;
+  } catch { return null; }
+}
+
 async function persist(state: Pick<State, "lang" | "theme" | "base" | "servers" | "userId" | "username" | "remember" | "password">) {
   const payload = {
     lang: state.lang,
     theme: state.theme,
     base: state.base,
+    servers: state.servers,
     userId: state.userId,
     username: state.username,
     remember: state.remember,
@@ -490,6 +543,10 @@ conn.on("document", ({ type }: { type: string }) => {
 conn.on("bridge:actorChanged", (message: any) => {
   const current = useStore.getState().actorId;
   if (current && message?.actorIds?.includes(current)) scheduleRefresh();
+});
+
+conn.on("bridge:combatChanged", () => {
+  if (useStore.getState().phase === "app") void useStore.getState().loadCombat();
 });
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;

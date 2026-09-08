@@ -1,6 +1,7 @@
 import React from "react";
 import { useStore } from "../store";
 import { translate } from "../i18n";
+import { assetUrl } from "../foundry/http";
 
 export function useT() {
   const lang = useStore(s => s.lang);
@@ -111,13 +112,7 @@ export function Stepper(props: { value: number; onChange: (value: number) => voi
 export function Html({ html }: { html: string }) {
   const base = useStore(s => s.base);
   const clean = React.useMemo(() => {
-    const absolute = (path: string) => {
-      if (/^(https?:|data:|blob:|#)/i.test(path)) return path;
-      const trimmed = path.replace(/^\.?\//, "");
-      // Foundry paths can carry spaces and Cyrillic; encode what is not encoded.
-      const safe = /%[0-9a-f]{2}/i.test(trimmed) ? trimmed : trimmed.split("/").map(encodeURIComponent).join("/");
-      return `${base}/${safe}`;
-    };
+    const absolute = (path: string) => (path === "#" || path.startsWith("#") ? path : assetUrl(path, base));
     return html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/ on[a-z]+="[^"]*"/gi, "")

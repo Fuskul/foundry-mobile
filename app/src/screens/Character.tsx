@@ -1,7 +1,7 @@
 import React from "react";
 import { useStore, bridge } from "../store";
 import { useT, Card, Empty, Html, useSwipe } from "../ui/common";
-import { Section, Row, NumEdit, Step, Check, TextEdit, imgUrl, useSheetLabels, Lightbox, Advance } from "../ui/sheet";
+import { Section, Row, NumEdit, Step, Check, TextEdit, imgUrl, useSheetLabels, Lightbox, Advance, AdvanceEdit } from "../ui/sheet";
 import { RollDialog, type RollTarget } from "../ui/RollDialog";
 
 type SheetTab = "main" | "skills" | "talents" | "combat" | "effects" | "magic" | "religion" | "trappings" | "notes";
@@ -64,6 +64,7 @@ export function Character() {
         )
       ) : null}
 
+      {s.sheetStale ? <div className="notice small stale">{t("sheet.stale")}</div> : null}
       {s.sheetError ? <div className="error">{s.sheetError}</div> : null}
       {!sheet ? <p className="muted">{t("app.loading")}</p> : (
         <>
@@ -145,7 +146,7 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
               <div key={c.key} className="row" style={{ gap: "0.4rem" }}>
                 <b style={{ width: "3rem" }}>{c.abbrev}</b>
                 <NumEdit value={c.initial} onCommit={v => void edit(`system.characteristics.${c.key}.initial`, v)} />
-                <NumEdit value={c.advances} onCommit={v => void advance("characteristic", v, c.key)} />
+                <AdvanceEdit value={c.advances} name={c.label} onAdvance={v => void advance("characteristic", v, c.key)} />
                 <NumEdit value={c.modifier} onCommit={v => void edit(`system.characteristics.${c.key}.modifier`, v)} />
                 <span className="grow" style={{ textAlign: "right", fontWeight: 700 }}>{c.value}</span>
               </div>
@@ -291,7 +292,7 @@ function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
                   onConfirm={() => advance("skill", skill.advances + 1, undefined, skill.id)}
                 />
               ) : null}
-              <NumEdit value={skill.advances} width={46} onCommit={v => void advance("skill", v, undefined, skill.id)} />
+              <AdvanceEdit value={skill.advances} width={46} name={skill.name} onAdvance={v => void advance("skill", v, undefined, skill.id)} />
               <span className="num">{skill.total}</span>
             </>
           }
@@ -473,13 +474,21 @@ function EffectsTab({ sheet }: { sheet: any }) {
   const t = useT();
   const L = useSheetLabels(sheet);
   const toggleCondition = useStore(s => s.toggleCondition);
+  const toggleEffect = useStore(s => s.toggleEffect);
   const edit = useStore(s => s.edit);
 
   const effectSection = (title: string, list: any[]) => (
     list.length ? (
       <Section title={title}>
         {list.map(e => (
-          <Row key={e.id} img={e.img} name={e.name} sub={e.source} detail={{ description: e.description }} />
+          <Row
+            key={e.id}
+            img={e.img}
+            name={e.name}
+            sub={e.source}
+            detail={{ description: e.description }}
+            right={<Check on={!e.disabled} label={t("sheet.equipped")} onToggle={() => void toggleEffect(e.id, !e.disabled)} />}
+          />
         ))}
       </Section>
     ) : null
