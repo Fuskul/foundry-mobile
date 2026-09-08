@@ -71,19 +71,20 @@ export const wfrp4eAdapter = {
     const det = sys.details ?? {};
     const auto = sys.autoCalc ?? {};
 
+    // One broken item must not take the whole sheet down with it.
     const [skills, talents, traits, weapons, armourItems, spells, prayers, ailments, inventory, extendedTests, careers] =
       await Promise.all([
-        skillLists(actor),
-        talentList(actor),
-        traitList(actor),
-        weaponList(actor),
-        armourList(actor),
-        spellLists(actor),
-        prayerLists(actor),
-        ailmentList(actor),
-        inventoryFor(actor),
-        extendedTestList(actor),
-        careerList(actor)
+        guard("skills", () => skillLists(actor), { basic: [], advanced: [] }),
+        guard("talents", () => talentList(actor), []),
+        guard("traits", () => traitList(actor), []),
+        guard("weapons", () => weaponList(actor), []),
+        guard("armour", () => armourList(actor), []),
+        guard("spells", () => spellLists(actor), { petty: [], lore: [] }),
+        guard("prayers", () => prayerLists(actor), { blessing: [], miracle: [] }),
+        guard("ailments", () => ailmentList(actor), []),
+        guard("inventory", () => inventoryFor(actor), { categories: [], containers: [], money: { total: 0, items: [] } }),
+        guard("extendedTests", () => extendedTestList(actor), []),
+        guard("careers", () => careerList(actor), [])
       ]);
 
     return {
@@ -190,9 +191,9 @@ export const wfrp4eAdapter = {
       ailments,
       inventory,
       extendedTests,
-      effects: effectList(actor),
-      conditions: conditionList(actor),
-      experienceLog: experienceLog(actor),
+      effects: await guard("effects", () => effectList(actor), { temporary: [], passive: [], disabled: [] }),
+      conditions: await guard("conditions", () => conditionList(actor), []),
+      experienceLog: await guard("experienceLog", () => experienceLog(actor), []),
       hasSpells: !!actor.itemTypes.spell.length,
       hasPrayers: !!actor.itemTypes.prayer.length
     };
@@ -287,6 +288,15 @@ export const wfrp4eAdapter = {
 };
 
 /* -------------------------------------------------------------------------- */
+
+/** Run one section of the sheet, falling back rather than failing the request. */
+async function guard(label, build, fallback) {
+  try { return await build(); }
+  catch (err) {
+    console.warn(`[MobileBridge] sheet section "${label}" failed:`, err);
+    return fallback;
+  }
+}
 
 function need(actor, id, type) {
   const item = actor.items.get(id);
