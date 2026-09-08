@@ -43,7 +43,11 @@ export const HANDLERS = {
     let list = game.actors.filter(a => canUseActor(user, a));
 
     if (scope === "mine") {
-      const mine = list.filter(a => user.character?.id === a.id || ownsExplicitly(a, user));
+      // The character assigned to this user counts as theirs whatever the
+      // permission table says, then anything they explicitly own.
+      const assigned = user.character ? [user.character] : [];
+      const owned = list.filter(a => a.testUserPermission(user, "OWNER"));
+      const mine = [...new Set([...assigned, ...owned])];
       list = mine.length ? mine : list.filter(a => a.type === "character");
     } else if (scope === "characters") {
       list = list.filter(a => a.type === "character");

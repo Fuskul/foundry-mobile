@@ -12,6 +12,7 @@ export function Character() {
   const [target, setTarget] = React.useState<RollTarget | null>(null);
 
   if (!s.actors.length) {
+    if (s.actorsLoading) return <Card title={t("actors.title")}><Empty text={t("app.loading")} /></Card>;
     return (
       <Card title={t("actors.title")}>
         <Empty text={s.bridgeError ? s.bridgeError : t("actors.empty")} />

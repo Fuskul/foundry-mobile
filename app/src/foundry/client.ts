@@ -17,6 +17,9 @@ export interface LogLine { at: number; level: LogLevel; text: string }
 
 type Listener = (...args: any[]) => void;
 
+/** Chatty events that would otherwise drown the log (cursor movement, mostly). */
+const QUIET_EVENTS = new Set(["modifyDocument", "userActivity"]);
+
 /**
  * A minimal Foundry VTT client: it performs the same /join handshake the web
  * client does, opens the same socket.io channel, and keeps a copy of the world
@@ -259,6 +262,12 @@ export class FoundryConnection {
 
   /** Attach the standard listeners and keep this socket as the live connection. */
   private adopt(socket: Socket) {
+    // Never leave an older connection running: two live sockets means every
+    // event arrives twice.
+    if (this.socket && this.socket !== socket) {
+      this.log("info", "closing the previous connection");
+      try { this.socket.removeAllListeners(); this.socket.disconnect(); } catch { /* already gone */ }
+    }
     this.socket = socket;
     socket.removeAllListeners("connect_error");
     socket.on("disconnect", reason => { this.log("warn", `socket disconnected: ${reason}`); this.emit("status"); });
@@ -266,7 +275,7 @@ export class FoundryConnection {
     socket.on("modifyDocument", (response: any) => this.onModifyDocument(response));
     socket.on("userActivity", (userId: string, activity: any) => this.emit("userActivity", userId, activity));
     socket.onAny((event: string, ...args: any[]) => {
-      if (event === "modifyDocument" || event.startsWith("module.")) return;
+      if (QUIET_EVENTS.has(event) || event.startsWith("module.")) return;
       this.log("info", `<- ${event} ${JSON.stringify(args).slice(0, 160)}`);
     });
     this.emit("status");
@@ -300,7 +309,7 @@ export class FoundryConnection {
     });
     socket.on("modifyDocument", (response: any) => this.onModifyDocument(response));
     socket.onAny((event: string, ...args: any[]) => {
-      if (event === "modifyDocument" || event.startsWith("module.")) return;
+      if (QUIET_EVENTS.has(event) || event.startsWith("module.")) return;
       this.log("info", `<- ${event} ${JSON.stringify(args).slice(0, 160)}`);
     });
     socket.on("userActivity", (userId: string, activity: any) => this.emit("userActivity", userId, activity));

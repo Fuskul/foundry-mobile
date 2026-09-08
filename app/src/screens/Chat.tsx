@@ -28,7 +28,10 @@ export function Chat() {
       <div className="chatlist">
         {visible.length ? visible.map(m => (
           <div key={m.id} className="msg">
-            {m.alias ? <div className="who">{m.alias}</div> : null}
+            <div className="who">
+              <span className="when">{new Date(m.timestamp).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
+              {m.alias}
+            </div>
             {m.flavor ? <div className="small muted">{m.flavor.replace(/<[^>]*>/g, "")}</div> : null}
             <Html html={m.content} />
           </div>

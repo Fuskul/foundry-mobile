@@ -50,6 +50,8 @@ export function requesterOf(request) {
 export function canUseActor(user, actor) {
   if (!user || !actor) return false;
   if (user.isGM) return true;
+  // The character a user is assigned to is always theirs to use.
+  if (user.character?.id === actor.id) return true;
   if (!game.settings.get(MODULE_ID, "requireOwnership")) return actor.testUserPermission(user, "OBSERVER");
   return actor.testUserPermission(user, "OWNER");
 }

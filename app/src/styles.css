@@ -185,3 +185,82 @@ pre.log { background: #0f0d0a; border: 1px solid var(--line); border-radius: 8px
 }
 .chip .chip-x { margin-left: 0.4rem; opacity: 0.7; font-size: 1rem; line-height: 1; }
 .chip.active .chip-x { opacity: 0.9; }
+
+/* ------------------------------------------------- WFRP4e cards inside chat */
+
+.msg .body .chat-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.7rem;
+  align-items: center;
+}
+.msg .body .chat-card > * { grid-column: 1 / -1; min-width: 0; }
+.msg .body .chat-card > .comparison { grid-column: 1; }
+.msg .body .chat-card > .sl { grid-column: 2; justify-self: end; }
+
+.msg .body .test-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--gold);
+  line-height: 1.25;
+}
+
+.msg .body .comparison {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-family: Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.msg .body .comparison > span:nth-child(2) {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.msg .body .comparison .critical { color: var(--green); }
+.msg .body .comparison .fumble { color: var(--blood); }
+
+.msg .body .sl-container {
+  display: inline-block;
+  min-width: 2.8rem;
+  text-align: center;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg-3);
+  font-family: Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.msg .body .description { font-size: 0.85rem; }
+.msg .body .description strong { color: var(--ink); }
+.msg .body .damage,
+.msg .body .card-content,
+.msg .body .chat-card > div { font-size: 0.8rem; color: var(--ink-dim); }
+.msg .body .damage strong,
+.msg .body .card-content strong,
+.msg .body b { color: var(--ink); }
+
+/* Foundry's interactive bits cannot work outside the desktop client. */
+.msg .body a { color: inherit; text-decoration: none; pointer-events: none; }
+.msg .body .chat-button,
+.msg .body .effect-button,
+.msg .body .damage-breakdown,
+.msg .body i.fa-circle-info { display: none; }
+
+/* Plain formula rolls */
+.msg .body .dice-formula { font-size: 0.75rem; color: var(--ink-dim); background: none; border: 0; padding: 0; }
+.msg .body .dice-total {
+  font-family: Georgia, serif; font-size: 1.35rem; font-weight: 700;
+  background: none; border: 0; padding: 0; display: block;
+}
+.msg .body .dice-tooltip, .msg .body .dice-result .dice-rolls { display: none; }
+
+.msg .when { float: right; font-size: 0.68rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }

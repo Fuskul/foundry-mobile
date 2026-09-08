@@ -193,7 +193,9 @@ export const wfrp4eAdapter = {
     const context = {
       skipDialog: payload?.skipDialog !== false,
       fields: cleanFields(payload?.fields ?? {}),
-      appendTitle: payload?.appendTitle ?? " — 📱"
+      // No marker on the card: a roll from the phone should be indistinguishable
+      // from one made at the table.
+      appendTitle: payload?.appendTitle ?? ""
     };
     const options = { skipTargets: payload?.skipTargets === true };
 

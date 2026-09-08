@@ -47,6 +47,7 @@ interface State {
   systemConfig: any;
 
   actors: any[];
+  actorsLoading: boolean;
   actorScope: "mine" | "characters";
   actorId: string | null;
   sheet: any | null;
@@ -97,6 +98,7 @@ export const useStore = create<State>((set, get) => ({
   systemConfig: null,
 
   actors: [],
+  actorsLoading: false,
   actorScope: "mine",
   actorId: null,
   sheet: null,
@@ -189,13 +191,16 @@ export const useStore = create<State>((set, get) => ({
 
   async loadActors(scope) {
     const wanted = scope ?? get().actorScope;
+    set({ actorsLoading: true });
     try {
       const actors = await bridge.actors(wanted);
-      set({ actors, actorScope: wanted });
+      set({ actors, actorScope: wanted, bridgeError: null });
       const current = get().actorId;
       if (!current && actors.length) void get().openActor(actors[0].id);
     } catch (err) {
       set({ bridgeError: (err as Error).message });
+    } finally {
+      set({ actorsLoading: false });
     }
   },
 
@@ -238,7 +243,7 @@ async function persist(state: Pick<State, "lang" | "base" | "servers" | "userId"
 
 function readChat(world: any): ChatEntry[] {
   const messages: any[] = world?.messages ?? [];
-  return messages.slice(-200).map(toEntry).filter(Boolean) as ChatEntry[];
+  return mergeChat([], messages.slice(-200).map(toEntry).filter(Boolean) as ChatEntry[]);
 }
 
 export function toEntry(message: any): ChatEntry | null {
@@ -260,8 +265,15 @@ conn.on("status", () => useStore.setState({ connected: conn.connected }));
 conn.on("chat", (result: any[]) => {
   const entries = (result ?? []).map(toEntry).filter(Boolean) as ChatEntry[];
   if (!entries.length) return;
-  useStore.setState(s => ({ chat: [...s.chat, ...entries].slice(-300) }));
+  useStore.setState(s => ({ chat: mergeChat(s.chat, entries) }));
 });
+
+/** The same message can arrive more than once; keep one copy, newest wins. */
+function mergeChat(existing: ChatEntry[], incoming: ChatEntry[]): ChatEntry[] {
+  const seen = new Map(existing.map(m => [m.id, m]));
+  for (const entry of incoming) seen.set(entry.id, entry);
+  return [...seen.values()].sort((a, b) => a.timestamp - b.timestamp).slice(-300);
+}
 
 conn.on("document", ({ type }: { type: string }) => {
   if (type === "Actor" || type === "Item" || type === "ActiveEffect") scheduleRefresh();
