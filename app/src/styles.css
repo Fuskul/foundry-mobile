@@ -425,3 +425,13 @@ input.numedit {
 .scrollx { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .tabstrip { flex-wrap: nowrap; }
 .tabstrip .chip { flex: 0 0 auto; }
+
+/* Chat card buttons: on the desktop these are Font Awesome glyphs, here they
+   carry their tooltip as a visible label. */
+.msg .body .chat-button, .msg .body a[data-tooltip] .btnlabel { font-size: 0.85rem; }
+.msg .body .btnlabel { margin-left: 0.3rem; }
+.msg .body .opposed-tokens img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; }
+.hide-opposed .opposed-options { display: none; }
+.cardactions { margin-top: 0.4rem; border-top: 1px solid var(--line); padding-top: 0.4rem; }
+.row.wrap { flex-wrap: wrap; }
+.btn.small { padding: 0.3rem 0.6rem; font-size: 0.8rem; }

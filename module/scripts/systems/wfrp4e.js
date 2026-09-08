@@ -69,21 +69,39 @@ function typeName(type) {
   return type;
 }
 
+/**
+ * Everything the sheet does not show elsewhere, grouped by item type. Official
+ * modules add types of their own — runes (Dwarfs), techniques (High Elves),
+ * chanties (Sea of Claws), cants (Archives III) — as do third-party compendia,
+ * and each gets its own section named the way that module names it.
+ */
 async function extraItems(actor) {
-  const out = [];
+  const groups = new Map();
   for (const i of actor.items) {
     if (SHOWN_TYPES.has(i.type)) continue;
+    if (!groups.has(i.type)) groups.set(i.type, []);
+    groups.get(i.type).push(i);
+  }
+
+  const out = [];
+  for (const [type, items] of groups) {
     out.push({
-      id: i.id,
-      name: i.name,
-      img: i.img,
-      type: i.type,
-      typeLabel: typeName(i.type),
-      quantity: n(i.system?.quantity?.value, null),
-      ...(await summary(i, actor))
+      type,
+      label: typeName(type),
+      items: await Promise.all(items
+        .sort((a, b) => a.name.localeCompare(b.name, game.i18n.lang))
+        .map(async i => ({
+          id: i.id,
+          name: i.name,
+          img: i.img,
+          type: i.type,
+          quantity: n(i.system?.quantity?.value, null),
+          usable: !!i.system?.usable,
+          ...(await summary(i, actor))
+        })))
     });
   }
-  return out.sort((a, b) => (a.typeLabel + a.name).localeCompare(b.typeLabel + b.name));
+  return out.sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
 }
 
 function descriptionOf(item) {
@@ -358,6 +376,20 @@ export const wfrp4eAdapter = {
     const allowed = itemId ? isItemPathAllowed(path) : isActorPathAllowed(path);
     if (!allowed) throw new Error(`Path not allowed: ${path}`);
 
+    // Advances cost experience: never write them raw, or the system opens its
+    // confirmation dialog on whichever browser is bridging.
+    const isAdvance = path === "system.advances.value" || /^system\.characteristics\.[a-z]+\.advances$/.test(path);
+    if (isAdvance && actor.type === "character") {
+      const current = n(foundry.utils.getProperty(target, path));
+      const wanted = mode === "step" ? current + n(value, 1) : n(value);
+      return this.advance(actor, {
+        kind: itemId ? "skill" : "characteristic",
+        key: itemId ? undefined : path.split(".")[2],
+        itemId,
+        target: wanted
+      });
+    }
+
     let next = value;
     if (mode === "toggle") next = !foundry.utils.getProperty(target, path);
     else if (mode === "step") next = n(foundry.utils.getProperty(target, path)) + n(value, 1);
@@ -366,6 +398,117 @@ export const wfrp4eAdapter = {
 
     await target.update({ [path]: next });
     return { itemId: itemId ?? null, path, value: next };
+  },
+
+  /**
+   * Buy or refund advances the way the desktop sheet does it: work out the XP,
+   * write the advance, the spent total and the log in one update, and tell the
+   * system to skip its own confirmation dialog — otherwise that dialog opens on
+   * whichever browser is acting as the bridge, not on the phone that asked.
+   */
+  async advance(actor, { kind, key, itemId, target, delta }) {
+    if (actor.type !== "character") throw new Error("Only characters spend experience");
+
+    const system = actor.system.toObject();
+    const experience = system.details.experience;
+    const update = { items: [] };
+    let from, to, name, type, modifier;
+
+    if (kind === "characteristic") {
+      const characteristic = system.characteristics?.[key];
+      if (!characteristic) throw new Error(`Unknown characteristic: ${key}`);
+      from = n(characteristic.advances);
+      modifier = n(actor.system.characteristics[key]?.costModifier);
+      name = game.wfrp4e?.config?.characteristics?.[key] ?? key;
+      type = "characteristic";
+    } else {
+      const skill = need(actor, itemId, "skill");
+      if (skill.type !== "skill") throw new Error("Only skills advance this way");
+      from = n(skill.system.advances?.value);
+      modifier = n(skill.system.advances?.costModifier);
+      name = skill.name;
+      type = "skill";
+    }
+
+    to = Number.isFinite(Number(target)) ? Math.max(0, Math.round(Number(target))) : from + n(delta, 1);
+    if (to === from) return { from, to, cost: 0 };
+
+    const cost = advanceRangeCost(from, to, type, modifier);
+    const spent = n(experience.spent) + cost;
+    if (n(experience.total) - spent < 0) {
+      throw new Error(game.i18n.format("ACTOR.AdvancementError", {
+        action: game.i18n.localize("ACTOR.ErrorImprove"),
+        item: name
+      }));
+    }
+
+    experience.spent = spent;
+    experience.log = actor.system.addToExpLog(cost, name, spent);
+
+    if (kind === "characteristic") system.characteristics[key].advances = to;
+    else update.items.push({ _id: itemId, "system.advances.value": to });
+
+    update.system = system;
+    await actor.update(update, { skipExperienceChecks: true });
+    return { from, to, cost, spent, name };
+  },
+
+  /**
+   * Answer an opposed test as the defender. The system would normally open its
+   * roll dialog on the client that presses the card button, so the phone sends
+   * its own choices and the test runs here without a dialog.
+   */
+  async opposed(actor, { messageId, optionId, fields }) {
+    const message = game.messages.get(messageId);
+    const handler = message?.system?.opposedHandler;
+    if (!handler) throw new Error("That message is not an opposed test");
+
+    const defender = handler.defender;
+    if (!defender) throw new Error("This opposed test has no defender yet");
+    if (defender.id !== actor.id) throw new Error(`${actor.name} is not the defender of that test`);
+
+    if (optionId === "unopposed") {
+      await handler.resolveUnopposed();
+      return { messageId, optionId, resolved: true };
+    }
+
+    const context = { skipTargets: true, skipDialog: true, fields: cleanFields(fields ?? {}) };
+    const test = optionId === "dodge"
+      ? await defender.setupSkill(game.i18n.localize("NAME.Dodge"), context)
+      : await defender.setupItem(optionId, context);
+    if (!test) throw new Error("The system did not build that test");
+    await test.roll();
+    return { messageId, optionId, resolved: true };
+  },
+
+  /** The defence options this card offers, with names the phone can show. */
+  opposedOptions(message, user) {
+    const handler = message?.system?.opposedHandler;
+    if (!handler) return null;
+    const defender = handler.defender;
+    if (!defender) return null;
+    return {
+      defender: { id: defender.id, name: defender.name },
+      canAct: defender.testUserPermission(user, "OWNER") || user.character?.id === defender.id,
+      options: (handler.getOpposedOptions?.(defender) ?? []).map(o => ({
+        id: o.id,
+        label: o.tooltip,
+        icon: o.icon
+      }))
+    };
+  },
+
+  /**
+   * Use an item the way its own module intends. WFRP4e gives every item type an
+   * "aspect" API, so a blood gift, a mutation or anything a third-party module
+   * adds can be used from the phone without this bridge knowing what it is.
+   */
+  async useItem(actor, { itemId }) {
+    const item = need(actor, itemId, "item");
+    if (!item.system?.usable) throw new Error(`${item.name} cannot be used`);
+    const result = await item.system.use({});
+    if (result?.roll) await result.roll();
+    return { itemId, name: item.name, used: true };
   },
 
   /** Add or remove a WFRP condition. */
@@ -378,6 +521,23 @@ export const wfrp4eAdapter = {
 };
 
 /* -------------------------------------------------------------------------- */
+
+/** XP cost of one advance, mirroring the system's own table lookup. */
+function advanceCost(currentAdvances, type, modifier = 0) {
+  const table = game.wfrp4e?.config?.xpCost?.[type] ?? [];
+  if (!table.length) return 0;
+  const index = Math.max(0, Math.floor(currentAdvances / 5));
+  return (index >= table.length ? table[table.length - 1] : table[index]) + n(modifier);
+}
+
+/** Total cost of moving between two advance counts; negative when refunding. */
+function advanceRangeCost(start, end, type, modifier = 0) {
+  let sign = 1;
+  if (end < start) { sign = -1; [start, end] = [end, start]; }
+  let cost = 0;
+  for (let i = start; i < end; i++) cost += advanceCost(i, type, modifier);
+  return cost * sign;
+}
 
 /** Run one section of the sheet, falling back rather than failing the request. */
 async function guard(label, build, fallback) {

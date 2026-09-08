@@ -123,6 +123,26 @@ export class Bridge {
     return this.request<any[]>("chatlog", { since, limit }, 20000);
   }
 
+  /** Buy or refund advances; the module does the experience arithmetic. */
+  advance(actorId: string, kind: "skill" | "characteristic", target: number, key?: string, itemId?: string) {
+    return this.request<any>("advance", { actorId, kind, target, key, itemId }, 20000);
+  }
+
+  /** Answer an opposed test as the defender, without a dialog on the host. */
+  opposed(actorId: string, messageId: string, optionId: string, fields: Record<string, unknown> = {}) {
+    return this.request<any>("opposed", { actorId, messageId, optionId, fields }, 30000);
+  }
+
+  /** Use an item through the system's own API — works for module item types. */
+  useItem(actorId: string, itemId: string) {
+    return this.request<any>("useItem", { actorId, itemId }, 30000);
+  }
+
+  /** What a card offers to press, with readable names. */
+  messageActions(messageId: string) {
+    return this.request<any>("messageActions", { messageId }, 15000);
+  }
+
   cardAction(messageId: string, action: string, index = 0) {
     return this.request<any>("cardAction", { messageId, action, index });
   }

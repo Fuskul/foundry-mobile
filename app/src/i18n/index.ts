@@ -144,6 +144,7 @@ const ru: Dict = {
   "sheet.ailments": "Недуги",
   "sheet.empty": "Пусто",
   "sheet.extras": "Прочее (из модулей)",
+  "sheet.use": "Применить",
   "sheet.damage": "Урон",
   "sheet.reach": "Досягаемость",
   "sheet.range": "Дальность",
@@ -186,6 +187,8 @@ const ru: Dict = {
   "chat.placeholder": "Сообщение…",
   "chat.send": "Отправить",
   "chat.empty": "Сообщений пока нет",
+  "chat.opposed": "Защищается: {name}",
+  "chat.unopposed": "Без защиты",
 
   "diag.title": "Диагностика подключения",
   "diag.hint": "Прогоняет всю цепочку по шагам и показывает, где именно ломается. Результат можно скопировать и прислать одним куском.",
@@ -411,6 +414,8 @@ const en: Dict = {
   "chat.placeholder": "Message…",
   "chat.send": "Send",
   "chat.empty": "No messages yet",
+  "chat.opposed": "Defending: {name}",
+  "chat.unopposed": "Unopposed",
 
   "diag.title": "Connection self-test",
   "diag.hint": "Walks the whole chain step by step and shows exactly where it breaks. The result can be copied in one piece.",

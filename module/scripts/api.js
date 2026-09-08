@@ -88,6 +88,54 @@ export const HANDLERS = {
     }));
   },
 
+  /** Buy or refund advances, doing the XP arithmetic on this side. */
+  async advance({ payload, user }) {
+    const actor = requireActor(payload?.actorId, user);
+    if (!game.settings.get(MODULE_ID, "allowEdits")) throw new Error("Editing is disabled by the GM");
+    const adapter = getAdapter();
+    if (!adapter.advance) throw new Error("This system adapter has no advancement");
+    return safe(await adapter.advance(actor, {
+      kind: payload?.kind ?? "skill",
+      key: payload?.key,
+      itemId: payload?.itemId,
+      target: payload?.target,
+      delta: payload?.delta
+    }));
+  },
+
+  /** Roll the defence of an opposed test on the phone's behalf. */
+  async opposed({ payload, user }) {
+    const actor = requireActor(payload?.actorId, user);
+    if (!game.settings.get(MODULE_ID, "allowRolls")) throw new Error("Rolls are disabled by the GM");
+    const adapter = getAdapter();
+    if (!adapter.opposed) throw new Error("This system adapter has no opposed tests");
+    return safe(await adapter.opposed(actor, {
+      messageId: payload?.messageId,
+      optionId: payload?.optionId,
+      fields: payload?.fields
+    }));
+  },
+
+  /** The buttons a card offers, named rather than drawn as icons. */
+  async messageActions({ payload, user }) {
+    const message = game.messages.get(String(payload?.messageId ?? ""));
+    if (!message) throw new Error("Message not found");
+    const adapter = getAdapter();
+    return safe({
+      messageId: message.id,
+      opposed: adapter.opposedOptions?.(message, user) ?? null
+    });
+  },
+
+  /** Use an item through the system's own item API (works for module types). */
+  async useItem({ payload, user }) {
+    const actor = requireActor(payload?.actorId, user);
+    if (!game.settings.get(MODULE_ID, "allowRolls")) throw new Error("Rolls are disabled by the GM");
+    const adapter = getAdapter();
+    if (!adapter.useItem) throw new Error("This system adapter cannot use items");
+    return safe(await adapter.useItem(actor, { itemId: payload?.itemId }));
+  },
+
   /** Add or remove a condition. */
   async condition({ payload, user }) {
     const actor = requireActor(payload?.actorId, user);
@@ -113,7 +161,8 @@ export const HANDLERS = {
         timestamp: m.timestamp,
         whisper: m.whisper ?? [],
         blind: !!m.blind,
-        rolls: (m.rolls ?? []).map(r => ({ formula: r.formula, total: r.total }))
+        rolls: (m.rolls ?? []).map(r => ({ formula: r.formula, total: r.total })),
+        opposed: getAdapter().opposedOptions?.(m, user) ?? null
       })));
   },
 

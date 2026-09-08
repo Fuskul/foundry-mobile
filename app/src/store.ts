@@ -74,6 +74,7 @@ interface State {
   setLang: (lang: Lang) => void;
   setTheme: (theme: Theme) => void;
   edit: (path: string, value: unknown, itemId?: string, mode?: "set" | "toggle" | "step") => Promise<void>;
+  advance: (kind: "skill" | "characteristic", target: number, key?: string, itemId?: string) => Promise<void>;
   toggleCondition: (key: string, remove: boolean) => Promise<void>;
   resync: () => Promise<void>;
   setTab: (tab: Tab) => void;
@@ -147,6 +148,23 @@ export const useStore = create<State>((set, get) => ({
     try {
       await bridge.edit(actorId, path, value, itemId, mode);
       await get().refreshSheet();
+    } catch (err) {
+      set({ sheetError: (err as Error).message });
+    }
+  },
+
+  /**
+   * Advances cost experience, and the system asks for confirmation on whichever
+   * browser writes them — which would be the host's, not this phone's. The
+   * module does the arithmetic instead and writes the result in one go.
+   */
+  async advance(kind, target, key, itemId) {
+    const actorId = get().actorId;
+    if (!actorId) return;
+    try {
+      await bridge.advance(actorId, kind, target, key, itemId);
+      await get().refreshSheet();
+      set({ sheetError: null });
     } catch (err) {
       set({ sheetError: (err as Error).message });
     }

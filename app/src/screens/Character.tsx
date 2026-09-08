@@ -1,5 +1,5 @@
 import React from "react";
-import { useStore } from "../store";
+import { useStore, bridge } from "../store";
 import { useT, Card, Empty, Html, useSwipe } from "../ui/common";
 import { Section, Row, NumEdit, Step, Check, TextEdit, imgUrl, useSheetLabels, Lightbox } from "../ui/sheet";
 import { RollDialog, type RollTarget } from "../ui/RollDialog";
@@ -101,6 +101,7 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
   const t = useT();
   const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
+  const advance = useStore(s => s.advance);
   const [editing, setEditing] = React.useState(false);
   const [zoom, setZoom] = React.useState<string | null>(null);
   const d = sheet.details ?? {};
@@ -139,7 +140,7 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
               <div key={c.key} className="row" style={{ gap: "0.4rem" }}>
                 <b style={{ width: "3rem" }}>{c.abbrev}</b>
                 <NumEdit value={c.initial} onCommit={v => void edit(`system.characteristics.${c.key}.initial`, v)} />
-                <NumEdit value={c.advances} onCommit={v => void edit(`system.characteristics.${c.key}.advances`, v)} />
+                <NumEdit value={c.advances} onCommit={v => void advance("characteristic", v, c.key)} />
                 <NumEdit value={c.modifier} onCommit={v => void edit(`system.characteristics.${c.key}.modifier`, v)} />
                 <span className="grow" style={{ textAlign: "right", fontWeight: 700 }}>{c.value}</span>
               </div>
@@ -237,6 +238,7 @@ function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
   const t = useT();
   const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
+  const advance = useStore(s => s.advance);
   const [query, setQuery] = React.useState("");
   const match = (list: any[]) => list.filter(x => x.name.toLowerCase().includes(query.trim().toLowerCase()));
 
@@ -254,7 +256,7 @@ function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
           })}
           right={
             <>
-              <NumEdit value={skill.advances} width={46} onCommit={v => void edit("system.advances.value", v, skill.id)} />
+              <NumEdit value={skill.advances} width={46} onCommit={v => void advance("skill", v, undefined, skill.id)} />
               <span className="num">{skill.total}</span>
             </>
           }
@@ -645,13 +647,20 @@ function TrappingsTab({ sheet }: { sheet: any }) {
         </Section>
       ) : null}
 
-      {(sheet.extras ?? []).length ? (
-        <Section title={t("sheet.extras")}>
-          {sheet.extras.map((item: any) => (
-            <Row key={item.id} img={item.img} name={item.name} sub={item.typeLabel} detail={item} />
+      {(sheet.extras ?? []).map((group: any) => (
+        <Section key={group.type} title={group.label}>
+          {group.items.map((item: any) => (
+            <Row
+              key={item.id}
+              img={item.img}
+              name={item.name}
+              sub={item.quantity != null ? `${t("sheet.qty")} ${item.quantity}` : undefined}
+              detail={item}
+              right={item.usable ? <UseButton actorId={sheet.id} itemId={item.id} /> : undefined}
+            />
           ))}
         </Section>
-      ) : null}
+      ))}
     </>
   );
 }
@@ -714,5 +723,25 @@ function NotesTab({ sheet }: { sheet: any }) {
         </Section>
       ) : null}
     </>
+  );
+}
+
+/** Runs an item's own "use" behaviour, whichever module defined it. */
+function UseButton({ actorId, itemId }: { actorId: string; itemId: string }) {
+  const t = useT();
+  const [busy, setBusy] = React.useState(false);
+  return (
+    <button
+      className="btn small"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try { await bridge.useItem(actorId, itemId); }
+        catch (err) { useStore.setState({ sheetError: (err as Error).message }); }
+        finally { setBusy(false); }
+      }}
+    >
+      {t("sheet.use")}
+    </button>
   );
 }

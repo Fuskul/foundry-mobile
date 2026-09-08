@@ -103,19 +103,31 @@ export function Stepper(props: { value: number; onChange: (value: number) => voi
 
 /**
  * Foundry chat cards are trusted HTML from our own server; strip scripts anyway.
- * Image and link paths in them are relative to the Foundry server, not to us,
- * so they are rewritten to absolute URLs or nothing would load.
+ * Three things have to be adjusted for a phone: image and link paths are
+ * relative to the Foundry server, links must not navigate the app away, and
+ * buttons that are pure Font Awesome icons on the desktop need their tooltip
+ * text as a visible label.
  */
 export function Html({ html }: { html: string }) {
   const base = useStore(s => s.base);
   const clean = React.useMemo(() => {
-    const absolute = (path: string) =>
-      /^(https?:|data:|blob:|#)/i.test(path) ? path : `${base}/${path.replace(/^\.?\//, "")}`;
+    const absolute = (path: string) => {
+      if (/^(https?:|data:|blob:|#)/i.test(path)) return path;
+      const trimmed = path.replace(/^\.?\//, "");
+      // Foundry paths can carry spaces and Cyrillic; encode what is not encoded.
+      const safe = /%[0-9a-f]{2}/i.test(trimmed) ? trimmed : trimmed.split("/").map(encodeURIComponent).join("/");
+      return `${base}/${safe}`;
+    };
     return html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/ on[a-z]+="[^"]*"/gi, "")
       .replace(/(<img\b[^>]*?\bsrc=")([^"]+)(")/gi, (_m, a, src, b) => a + absolute(src) + b)
-      .replace(/(<a\b[^>]*?\bhref=")([^"]+)(")/gi, (_m, a, href, b) => a + absolute(href) + b);
+      .replace(/(<a\b[^>]*?\b)href="([^"]+)"/gi, (_m, a, href) => `${a}data-href="${absolute(href)}"`)
+      // An icon-only control says what it does in its tooltip; show that instead.
+      .replace(
+        /(<a\b[^>]*?\bdata-tooltip="([^"]*)"[^>]*>)\s*(<i\b[^>]*><\/i>)\s*(<\/a>)/gi,
+        (_m, open, tip, icon, close) => `${open}${icon}<span class="btnlabel">${tip}</span>${close}`
+      );
   }, [html, base]);
   return <div className="body" dangerouslySetInnerHTML={{ __html: clean }} />;
 }
