@@ -40,35 +40,66 @@ Hooks.once("init", () => {
     onChange: setVerbose
   });
 
-  // v13 accepts ApplicationV2 subclasses; older cores need a FormApplication.
-  const MenuBase = foundry?.applications?.api?.ApplicationV2 ?? FormApplication;
-  class ConnectMenu extends MenuBase {
-    render() { renderConnectDialog(); return this; }
+  // The connect-dialog menu is a convenience; if subclassing the core app class
+  // ever fails on a new Foundry version it must not take the settings section
+  // (and therefore the whole module's controls) down with it.
+  try {
+    const MenuBase = foundry?.applications?.api?.ApplicationV2 ?? FormApplication;
+    class ConnectMenu extends MenuBase {
+      render() { renderConnectDialog(); return this; }
+    }
+    game.settings.registerMenu(MODULE_ID, "connectMenu", {
+      name: "FVTTMB.Menu.Connect",
+      label: "FVTTMB.Menu.ConnectLabel",
+      hint: "FVTTMB.Menu.ConnectHint",
+      icon: "fas fa-mobile-screen",
+      type: ConnectMenu,
+      restricted: false
+    });
+  } catch (err) {
+    console.error("[MobileBridge] connect menu registration failed (settings still registered):", err);
   }
-
-  game.settings.registerMenu(MODULE_ID, "connectMenu", {
-    name: "FVTTMB.Menu.Connect",
-    label: "FVTTMB.Menu.ConnectLabel",
-    hint: "FVTTMB.Menu.ConnectHint",
-    icon: "fas fa-mobile-screen",
-    type: ConnectMenu,
-    restricted: false
-  });
 });
 
 /* -------------------------------------------------------------------- ready */
 
 Hooks.once("ready", () => {
-  setVerbose(game.settings.get(MODULE_ID, "verbose"));
-  game.socket.on(SOCKET, onSocket);
-  registerChangeBroadcast();
+  // The socket listener is the whole point of the module, so it goes on first
+  // and on its own — nothing after it can stop the bridge from listening.
+  try {
+    game.socket.on(SOCKET, onSocket);
+  } catch (err) {
+    console.error("[MobileBridge] could not attach the socket listener:", err);
+  }
 
-  game.modules.get(MODULE_ID).api = {
-    handlers: HANDLERS,
-    protocol: PROTOCOL_VERSION,
-    openConnectDialog: renderConnectDialog
-  };
+  try { setVerbose(game.settings.get(MODULE_ID, "verbose")); } catch (_e) { /* setting may be missing */ }
+  try { registerChangeBroadcast(); } catch (err) { console.error("[MobileBridge] change broadcast failed:", err); }
 
+  try {
+    game.modules.get(MODULE_ID).api = {
+      handlers: HANDLERS,
+      protocol: PROTOCOL_VERSION,
+      openConnectDialog: renderConnectDialog,
+      selftest: () => ({
+        ready: true,
+        protocol: PROTOCOL_VERSION,
+        enabled: game.settings.get(MODULE_ID, "enabled"),
+        system: game.system.id,
+        isGM: game.user.isGM,
+        user: game.user.name
+      })
+    };
+  } catch (err) {
+    console.error("[MobileBridge] could not publish the module API:", err);
+  }
+
+  // A plain, always-on console banner so a GM can confirm in one glance (F12)
+  // that the bridge loaded and is listening — the commonest support question.
+  const on = (() => { try { return game.settings.get(MODULE_ID, "enabled"); } catch { return "?"; } })();
+  console.log(
+    `%c[MobileBridge]%c online — protocol v${PROTOCOL_VERSION}, system "${game.system.id}", enabled=${on}, you are ${game.user.isGM ? "GM" : "a player"} (${game.user.name}). Listening for phones.`,
+    "color:#c8a24a;font-weight:bold", "color:inherit"
+  );
   info(`ready — protocol v${PROTOCOL_VERSION}, system "${game.system.id}"`);
 });
 

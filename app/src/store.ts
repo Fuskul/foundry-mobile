@@ -3,7 +3,19 @@ import { Preferences } from "@capacitor/preferences";
 import { FoundryConnection, type ServerStatus, type JoinUser } from "./foundry/client";
 import { defaultBase, http, normaliseBase } from "./foundry/http";
 import { Bridge, type BridgeInfo } from "./foundry/bridge";
-import { detectLang, type Lang } from "./i18n";
+import { detectLang, translate, type Lang } from "./i18n";
+
+/**
+ * A raw transport error ("timeout", "not connected") means nothing to a player.
+ * The only reason a ping goes unanswered is that no browser in the world is
+ * running the bridge — because none is a GM/owner online, or the module is off —
+ * so say that, in the app's language.
+ */
+function bridgeMessage(err: unknown, lang: Lang): string {
+  const raw = (err as Error)?.message ?? String(err);
+  if (/timeout|not connected|disconnected/i.test(raw)) return translate(lang, "bridge.noHost");
+  return raw;
+}
 
 export const conn = new FoundryConnection();
 export const bridge = new Bridge(conn);
@@ -340,7 +352,7 @@ export const useStore = create<State>((set, get) => ({
       set({ bridgeInfo: info, bridgeError: null });
       try { set({ systemConfig: await bridge.config() }); } catch { /* optional */ }
     } catch (err) {
-      set({ bridgeInfo: null, bridgeError: (err as Error).message });
+      set({ bridgeInfo: null, bridgeError: bridgeMessage(err, get().lang) });
     }
   },
 
@@ -353,7 +365,7 @@ export const useStore = create<State>((set, get) => ({
       const current = get().actorId;
       if (!current && actors.length) void get().openActor(actors[0].id);
     } catch (err) {
-      set({ bridgeError: (err as Error).message });
+      set({ bridgeError: bridgeMessage(err, get().lang) });
     } finally {
       set({ actorsLoading: false });
     }

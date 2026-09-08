@@ -208,6 +208,7 @@ const ru: Dict = {
   "diag.socket": "Соединение с игрой",
   "diag.world": "Данные мира получены",
   "diag.bridge": "Модуль-мост отвечает",
+  "bridge.noHost": "Мир никто не обслуживает. Нужно, чтобы в этом мире был онлайн браузер, вошедший как Мастер, с включённым модулем Mobile Bridge. Обычно это вкладка мастера. Проверьте: модуль включён в «Управление модулями», и кто-то из мастеров сейчас в игре.",
 
   "settings.title": "Настройки",
   "settings.appearance": "Внешний вид",
@@ -436,6 +437,7 @@ const en: Dict = {
   "diag.socket": "Game connection",
   "diag.world": "World data received",
   "diag.bridge": "Bridge module answers",
+  "bridge.noHost": "No one is hosting this world. A browser must be logged in as a Gamemaster in this world with the Mobile Bridge module enabled — usually the GM's own tab. Check that the module is enabled in Manage Modules and that a GM is currently in the game.",
 
   "settings.title": "Settings",
   "settings.appearance": "Appearance",
