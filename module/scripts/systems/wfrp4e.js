@@ -142,41 +142,6 @@ function typeName(type) {
   return type;
 }
 
-/**
- * Everything the sheet does not show elsewhere, grouped by item type. Official
- * modules add types of their own — runes (Dwarfs), techniques (High Elves),
- * chanties (Sea of Claws), cants (Archives III) — as do third-party compendia,
- * and each gets its own section named the way that module names it.
- */
-async function extraItems(actor) {
-  const groups = new Map();
-  for (const i of actor.items) {
-    if (SHOWN_TYPES.has(i.type)) continue;
-    if (!groups.has(i.type)) groups.set(i.type, []);
-    groups.get(i.type).push(i);
-  }
-
-  const out = [];
-  for (const [type, items] of groups) {
-    out.push({
-      type,
-      label: typeName(type),
-      items: await Promise.all(items
-        .sort((a, b) => a.name.localeCompare(b.name, game.i18n.lang))
-        .map(async i => ({
-          id: i.id,
-          name: i.name,
-          img: i.img,
-          type: i.type,
-          quantity: n(i.system?.quantity?.value, null),
-          usable: !!i.system?.usable,
-          ...(await summary(i, actor))
-        })))
-    });
-  }
-  return out.sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
-}
-
 function descriptionOf(item) {
   const raw = item?.system?.description?.value ?? "";
   return typeof raw === "string" ? raw : "";
