@@ -29,13 +29,55 @@ export function Card(props: { title?: string; children: React.ReactNode }) {
   );
 }
 
-export function Modal(props: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+export function Modal(props: { open: boolean; title?: string; onClose: () => void; children: React.ReactNode }) {
   if (!props.open) return null;
   return (
     <div className="backdrop" onClick={props.onClose}>
-      <div className="modal" onClick={event => event.stopPropagation()}>{props.children}</div>
+      <div className="modal" onClick={event => event.stopPropagation()}>
+        {props.title ? (
+          <div className="row spread" style={{ marginBottom: "0.6rem" }}>
+            <h2 style={{ margin: 0 }}>{props.title}</h2>
+            <button className="iconbtn" aria-label="×" onClick={props.onClose}>×</button>
+          </div>
+        ) : null}
+        {props.children}
+      </div>
     </div>
   );
+}
+
+/**
+ * Horizontal swipe recogniser. Vertical drags and pinches are left alone so
+ * scrolling and zooming keep working; only a decisive sideways flick counts.
+ */
+export function useSwipe(onLeft: () => void, onRight: () => void) {
+  const start = React.useRef<{ x: number; y: number; t: number } | null>(null);
+
+  return {
+    onTouchStart: (event: React.TouchEvent) => {
+      if (event.touches.length !== 1) { start.current = null; return; }
+      const touch = event.touches[0];
+      start.current = { x: touch.clientX, y: touch.clientY, t: Date.now() };
+    },
+    onTouchEnd: (event: React.TouchEvent) => {
+      const from = start.current;
+      start.current = null;
+      if (!from) return;
+      const target = event.target as HTMLElement | null;
+      // Sliders, scrollable strips and text fields own their own gestures.
+      if (target?.closest("input, textarea, select, .scrollx, .lightbox")) return;
+      const native = event.nativeEvent as any;
+      if (native.__swipeHandled) return; // an inner strip already used this flick
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      const dx = touch.clientX - from.x;
+      const dy = touch.clientY - from.y;
+      if (Date.now() - from.t > 800) return;
+      if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+      native.__swipeHandled = true;
+      if (dx < 0) onLeft(); else onRight();
+    }
+  };
 }
 
 export function Stepper(props: { value: number; onChange: (value: number) => void; step?: number; min?: number; max?: number }) {
@@ -59,12 +101,22 @@ export function Stepper(props: { value: number; onChange: (value: number) => voi
   );
 }
 
-/** Foundry chat cards are trusted HTML from our own server; strip scripts anyway. */
+/**
+ * Foundry chat cards are trusted HTML from our own server; strip scripts anyway.
+ * Image and link paths in them are relative to the Foundry server, not to us,
+ * so they are rewritten to absolute URLs or nothing would load.
+ */
 export function Html({ html }: { html: string }) {
-  const clean = React.useMemo(
-    () => html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/ on[a-z]+="[^"]*"/gi, ""),
-    [html]
-  );
+  const base = useStore(s => s.base);
+  const clean = React.useMemo(() => {
+    const absolute = (path: string) =>
+      /^(https?:|data:|blob:|#)/i.test(path) ? path : `${base}/${path.replace(/^\.?\//, "")}`;
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/ on[a-z]+="[^"]*"/gi, "")
+      .replace(/(<img\b[^>]*?\bsrc=")([^"]+)(")/gi, (_m, a, src, b) => a + absolute(src) + b)
+      .replace(/(<a\b[^>]*?\bhref=")([^"]+)(")/gi, (_m, a, href, b) => a + absolute(href) + b);
+  }, [html, base]);
   return <div className="body" dangerouslySetInnerHTML={{ __html: clean }} />;
 }
 

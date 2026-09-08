@@ -1,86 +1,133 @@
 import React from "react";
-import { useStore } from "../store";
-import { useT, Field, Card } from "../ui/common";
+import { useStore, type ServerEntry } from "../store";
+import { useT, Field, Card, Modal } from "../ui/common";
 import { LANGS, translateError } from "../i18n";
 import { Diagnostics } from "../ui/Diagnostics";
 
 export function Connect() {
   const t = useT();
   const s = useStore();
-  const [base, setBase] = React.useState(s.base);
+  const [adding, setAdding] = React.useState(false);
+  const [renaming, setRenaming] = React.useState<ServerEntry | null>(null);
+  const [address, setAddress] = React.useState("");
+  const [label, setLabel] = React.useState("");
 
-  React.useEffect(() => setBase(s.base), [s.base]);
+  const openAdd = () => { setAddress(s.base || ""); setLabel(""); setAdding(true); };
 
-  const check = (address: string) => {
-    setBase(address);
+  function confirmAdd() {
+    if (!address.trim()) return;
+    s.addServer(address, label);
+    setAdding(false);
     void s.probe(address);
-  };
+  }
+
+  function confirmRename() {
+    if (renaming) s.renameServer(renaming.url, label);
+    setRenaming(null);
+  }
 
   return (
     <div>
       <Card>
         <div className="row spread" style={{ marginBottom: "0.6rem" }}>
           <h2 style={{ margin: 0 }}>{t("connect.title")}</h2>
-          <select
-            style={{ width: "auto" }}
-            value={s.lang}
-            onChange={event => s.setLang(event.target.value as any)}
-          >
-            {LANGS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
-          </select>
+          <div className="row" style={{ gap: "0.4rem" }}>
+            <select
+              style={{ width: "auto" }}
+              aria-label={t("settings.theme")}
+              value={s.theme}
+              onChange={event => s.setTheme(event.target.value as any)}
+            >
+              <option value="dark">{t("settings.themeDark")}</option>
+              <option value="light">{t("settings.themeLight")}</option>
+              <option value="system">{t("settings.themeSystem")}</option>
+            </select>
+            <select
+              style={{ width: "auto" }}
+              aria-label={t("settings.language")}
+              value={s.lang}
+              onChange={event => s.setLang(event.target.value as any)}
+            >
+              {LANGS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+            </select>
+          </div>
         </div>
 
-        {s.servers.length ? (
-          <>
-            <span className="small muted">{t("connect.saved")}</span>
-            <div className="chips" style={{ marginTop: "0.3rem" }}>
-              {s.servers.map(address => (
-                <span key={address} className={`chip ${address === s.base ? "active" : ""}`} style={{ paddingRight: "0.35rem" }}>
+        <div className="row spread" style={{ marginBottom: "0.4rem" }}>
+          <span className="small muted">{t("connect.saved")}</span>
+          <button className="linkbtn small" onClick={() => void s.checkServers()}>
+            {t("connect.refresh")}
+          </button>
+        </div>
+
+        <div className="serverlist">
+          {s.servers.map(entry => {
+            const info = s.serverStatus[entry.url] ?? {};
+            const parts = [
+              info.world,
+              [info.system, info.systemVersion].filter(Boolean).join(" "),
+              info.version ? `Foundry ${info.version}` : ""
+            ].filter(Boolean);
+            return (
+              <div key={entry.url} className={`server ${entry.url === s.base ? "active" : ""}`}>
+                <button className="server-main" onClick={() => void s.probe(entry.url)}>
+                  <span className="server-head">
+                    <span
+                      className={`dot ${info.checking ? "wait" : info.online ? "on" : ""}`}
+                      aria-hidden="true"
+                    />
+                    <b>{entry.name}</b>
+                  </span>
+                  <span className="server-url">{entry.url.replace(/^https?:\/\//, "")}</span>
+                  <span className="server-meta small muted">
+                    {info.checking
+                      ? t("connect.checking")
+                      : info.online
+                        ? parts.join(" · ") || t("connect.stateOnline")
+                        : t("connect.stateOffline")}
+                    {info.online && typeof info.players === "number"
+                      ? ` · ${t("connect.online")}: ${info.players}`
+                      : ""}
+                  </span>
+                </button>
+                <div className="server-tools">
                   <button
-                    className="chip-label"
-                    onClick={() => check(address)}
-                    title={address}
+                    className="iconbtn"
+                    aria-label={t("connect.rename")}
+                    onClick={() => { setRenaming(entry); setLabel(entry.name); }}
                   >
-                    {address.replace(/^https?:\/\//, "")}
+                    ✎
                   </button>
                   <button
-                    className="chip-x"
+                    className="iconbtn"
                     aria-label={t("connect.forget")}
-                    onClick={() => s.forgetServer(address)}
+                    onClick={() => s.forgetServer(entry.url)}
                   >
                     ×
                   </button>
-                </span>
-              ))}
-            </div>
-          </>
+                </div>
+              </div>
+            );
+          })}
+
+          <button className="server add" onClick={openAdd}>
+            <span>＋ {t("connect.addServer")}</span>
+          </button>
+        </div>
+
+        {s.error ? <div className="error" style={{ marginTop: "0.7rem" }}>{translateError(s.lang, s.error)}</div> : null}
+
+        {s.busy === "probe" ? (
+          <div className="notice small" style={{ marginTop: "0.7rem", marginBottom: 0 }}>{t("connect.checking")}</div>
         ) : null}
-
-        {s.error ? <div className="error">{translateError(s.lang, s.error)}</div> : null}
-
-        <Field label={t("connect.server")} hint={t("connect.serverHint")}>
-          <input
-            value={base}
-            inputMode="url"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="192.168.1.103:30000"
-            onChange={event => setBase(event.target.value)}
-          />
-        </Field>
-
-        <button
-          className="btn block"
-          disabled={s.busy === "probe" || !base.trim()}
-          onClick={() => check(base)}
-        >
-          {s.busy === "probe" ? t("connect.checking") : t("connect.check")}
-        </button>
 
         {s.probed && s.status.version ? (
           <div className="notice small" style={{ marginTop: "0.7rem", marginBottom: 0 }}>
-            {[s.status.world, `${s.status.system ?? ""} ${s.status.systemVersion ?? ""}`.trim(), `Foundry ${s.status.version}`]
+            {[
+              s.worldTitle || s.status.world,
+              `${s.status.system ?? ""} ${s.status.systemVersion ?? ""}`.trim(),
+              `Foundry ${s.status.version}`
+            ]
               .filter(Boolean)
               .join(" · ")}
           </div>
@@ -133,6 +180,43 @@ export function Connect() {
       ) : null}
 
       <Diagnostics />
+
+      <Modal open={adding} title={t("connect.addServer")} onClose={() => setAdding(false)}>
+        <Field label={t("connect.server")} hint={t("connect.serverHint")}>
+          <input
+            value={address}
+            inputMode="url"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="192.168.1.103:30000"
+            onChange={event => setAddress(event.target.value)}
+          />
+        </Field>
+        <Field label={t("connect.name")} hint={t("connect.nameHint")}>
+          <input
+            value={label}
+            placeholder={t("connect.namePlaceholder")}
+            onChange={event => setLabel(event.target.value)}
+            onKeyDown={event => { if (event.key === "Enter") confirmAdd(); }}
+          />
+        </Field>
+        <button className="btn primary block" disabled={!address.trim()} onClick={confirmAdd}>
+          {t("connect.save")}
+        </button>
+      </Modal>
+
+      <Modal open={!!renaming} title={t("connect.rename")} onClose={() => setRenaming(null)}>
+        <Field label={t("connect.name")}>
+          <input
+            value={label}
+            autoFocus
+            onChange={event => setLabel(event.target.value)}
+            onKeyDown={event => { if (event.key === "Enter") confirmRename(); }}
+          />
+        </Field>
+        <button className="btn primary block" onClick={confirmRename}>{t("connect.save")}</button>
+      </Modal>
     </div>
   );
 }

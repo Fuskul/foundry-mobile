@@ -1,5 +1,5 @@
 import React from "react";
-import { Html } from "./common";
+import { Html, useT } from "./common";
 import { useStore } from "../store";
 
 /** Absolute URL for an image path coming from Foundry. */
@@ -114,5 +114,28 @@ export function TextEdit(props: { value: string; onCommit: (value: string) => vo
     <textarea rows={4} value={text} placeholder={props.placeholder} onChange={e => setText(e.target.value)} onBlur={commit} />
   ) : (
     <input type="text" value={text} placeholder={props.placeholder} onChange={e => setText(e.target.value)} onBlur={commit} />
+  );
+}
+
+/**
+ * Prefer the term Foundry itself uses for this world — that way the phone
+ * matches whatever translation the table plays with — and fall back to the
+ * app's own wording when the world cannot translate that key.
+ */
+export function useSheetLabels(sheet: any) {
+  const t = useT();
+  return React.useCallback(
+    (key: string, fallback: string) => (sheet?.labels?.[key] as string) || t(fallback),
+    [sheet, t]
+  );
+}
+
+/** Full-screen image viewer. */
+export function Lightbox({ src, onClose }: { src: string | null; onClose: () => void }) {
+  if (!src) return null;
+  return (
+    <div className="lightbox" onClick={onClose}>
+      <img src={src} alt="" />
+    </div>
   );
 }

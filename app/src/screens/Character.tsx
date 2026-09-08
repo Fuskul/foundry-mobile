@@ -1,7 +1,7 @@
 import React from "react";
 import { useStore } from "../store";
-import { useT, Card, Empty, Html } from "../ui/common";
-import { Section, Row, NumEdit, Step, Check, TextEdit, imgUrl } from "../ui/sheet";
+import { useT, Card, Empty, Html, useSwipe } from "../ui/common";
+import { Section, Row, NumEdit, Step, Check, TextEdit, imgUrl, useSheetLabels, Lightbox } from "../ui/sheet";
 import { RollDialog, type RollTarget } from "../ui/RollDialog";
 
 type SheetTab = "main" | "skills" | "talents" | "combat" | "effects" | "magic" | "religion" | "trappings" | "notes";
@@ -13,6 +13,18 @@ export function Character() {
   const s = useStore();
   const [tab, setTab] = React.useState<SheetTab>("main");
   const [target, setTarget] = React.useState<RollTarget | null>(null);
+
+  const sheet = s.sheet;
+  const tabs = ALL_TABS.filter(id =>
+    (id !== "magic" || sheet?.hasSpells) && (id !== "religion" || sheet?.hasPrayers));
+  const active = tabs.includes(tab) ? tab : "main";
+
+  // A sideways flick walks the sheet's own tabs before the app-level tabs see it.
+  const stepTab = (delta: number) => {
+    const next = tabs[tabs.indexOf(active) + delta];
+    if (next) setTab(next);
+  };
+  const swipe = useSwipe(() => stepTab(1), () => stepTab(-1));
 
   if (!s.actors.length) {
     if (s.actorsLoading) return <Card title={t("actors.title")}><Empty text={t("app.loading")} /></Card>;
@@ -27,10 +39,6 @@ export function Character() {
     );
   }
 
-  const sheet = s.sheet;
-  const tabs = ALL_TABS.filter(id =>
-    (id !== "magic" || sheet?.hasSpells) && (id !== "religion" || sheet?.hasPrayers));
-  const active = tabs.includes(tab) ? tab : "main";
   const roll = (next: RollTarget) => setTarget(next);
 
   return (
@@ -59,13 +67,15 @@ export function Character() {
       {s.sheetError ? <div className="error">{s.sheetError}</div> : null}
       {!sheet ? <p className="muted">{t("app.loading")}</p> : (
         <>
-          <div className="chips">
+          <div className="chips scrollx tabstrip">
             {tabs.map(id => (
               <button key={id} className={`chip ${active === id ? "active" : ""}`} onClick={() => setTab(id)}>
-                {t(`sheet.tab.${id}`)}
+                {sheet.labels?.[id] || t(`sheet.tab.${id}`)}
               </button>
             ))}
           </div>
+
+          <div {...swipe}>
 
           {active === "main" ? <MainTab sheet={sheet} onRoll={roll} /> : null}
           {active === "skills" ? <SkillsTab sheet={sheet} onRoll={roll} /> : null}
@@ -76,6 +86,7 @@ export function Character() {
           {active === "religion" ? <ReligionTab sheet={sheet} onRoll={roll} /> : null}
           {active === "trappings" ? <TrappingsTab sheet={sheet} /> : null}
           {active === "notes" ? <NotesTab sheet={sheet} /> : null}
+          </div>
         </>
       )}
 
@@ -88,8 +99,10 @@ export function Character() {
 
 function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
   const t = useT();
+  const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
   const [editing, setEditing] = React.useState(false);
+  const [zoom, setZoom] = React.useState<string | null>(null);
   const d = sheet.details ?? {};
   const st = sheet.status ?? {};
 
@@ -97,7 +110,14 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
     <>
       <Card>
         <div className="row" style={{ marginBottom: "0.6rem" }}>
-          {sheet.img ? <img src={imgUrl(sheet.img)} alt="" style={{ width: 54, height: 54, borderRadius: 8, objectFit: "cover" }} /> : null}
+          {sheet.img ? (
+            <img
+              src={imgUrl(sheet.img)}
+              alt=""
+              style={{ width: 54, height: 54, borderRadius: 8, objectFit: "cover", cursor: "zoom-in" }}
+              onClick={() => setZoom(imgUrl(sheet.img))}
+            />
+          ) : null}
           <div className="grow">
             <div className="serif" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{sheet.name}</div>
             <div className="small muted">{[d.species, d.subspecies].filter(Boolean).join(" · ")}</div>
@@ -111,9 +131,9 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
           <div className="stack" style={{ gap: "0.35rem" }}>
             <div className="row small muted" style={{ gap: "0.4rem" }}>
               <span style={{ width: "3rem" }} />
-              <span style={{ width: 60, textAlign: "center" }}>{t("sheet.initial")}</span>
-              <span style={{ width: 60, textAlign: "center" }}>{t("sheet.advances")}</span>
-              <span style={{ width: 60, textAlign: "center" }}>{t("sheet.modifier")}</span>
+              <span style={{ width: 60, textAlign: "center" }}>{L("initial", "sheet.initial")}</span>
+              <span style={{ width: 60, textAlign: "center" }}>{L("advances", "sheet.advances")}</span>
+              <span style={{ width: 60, textAlign: "center" }}>{L("modifier", "sheet.modifier")}</span>
             </div>
             {sheet.characteristics.map((c: any) => (
               <div key={c.key} className="row" style={{ gap: "0.4rem" }}>
@@ -144,29 +164,31 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => voi
 
       <Card>
         <div className="resgrid">
-          <Resource label={t("sheet.wounds")} path="system.status.wounds.value" value={st.wounds?.value ?? 0} max={st.wounds?.max} />
-          <Resource label={t("sheet.advantage")} path="system.status.advantage.value" value={st.advantage?.value ?? 0} />
-          <Resource label={t("sheet.fate")} path="system.status.fate.value" value={st.fate?.value ?? 0} />
-          <Resource label={t("sheet.fortune")} path="system.status.fortune.value" value={st.fortune?.value ?? 0} />
-          <Resource label={t("sheet.resilience")} path="system.status.resilience.value" value={st.resilience?.value ?? 0} />
-          <Resource label={t("sheet.resolve")} path="system.status.resolve.value" value={st.resolve?.value ?? 0} />
-          <Resource label={t("sheet.corruption")} path="system.status.corruption.value" value={st.corruption?.value ?? 0} max={st.corruption?.max || undefined} />
-          <Resource label={t("sheet.sin")} path="system.status.sin.value" value={st.sin?.value ?? 0} />
+          <Resource label={L("wounds", "sheet.wounds")} path="system.status.wounds.value" value={st.wounds?.value ?? 0} max={st.wounds?.max} />
+          <Resource label={L("advantage", "sheet.advantage")} path="system.status.advantage.value" value={st.advantage?.value ?? 0} />
+          <Resource label={L("fate", "sheet.fate")} path="system.status.fate.value" value={st.fate?.value ?? 0} />
+          <Resource label={L("fortune", "sheet.fortune")} path="system.status.fortune.value" value={st.fortune?.value ?? 0} />
+          <Resource label={L("resilience", "sheet.resilience")} path="system.status.resilience.value" value={st.resilience?.value ?? 0} />
+          <Resource label={L("resolve", "sheet.resolve")} path="system.status.resolve.value" value={st.resolve?.value ?? 0} />
+          <Resource label={L("corruption", "sheet.corruption")} path="system.status.corruption.value" value={st.corruption?.value ?? 0} max={st.corruption?.max || undefined} />
+          <Resource label={L("sin", "sheet.sin")} path="system.status.sin.value" value={st.sin?.value ?? 0} />
         </div>
       </Card>
 
       <Card>
         <div className="stack small">
-          <div className="kv"><span>{t("sheet.movement")}</span><b>{d.move?.value} / {d.move?.walk} / {d.move?.run}</b></div>
-          <div className="kv"><span>{t("sheet.encumbrance")}</span><b>{st.encumbrance?.current} / {st.encumbrance?.max}</b></div>
-          <div className="kv"><span>{t("sheet.criticals")}</span><b>{st.criticalWounds?.value} / {st.criticalWounds?.max}</b></div>
-          <div className="kv"><span>{t("sheet.exp")}</span><b>{d.experience?.current} {t("sheet.expFree")} / {d.experience?.total}</b></div>
-          {d.statusStanding ? <div className="kv"><span>{t("sheet.status")}</span><b>{d.statusText} {d.statusStanding}</b></div> : null}
+          <div className="kv"><span>{L("movement", "sheet.movement")}</span><b>{d.move?.value} / {d.move?.walk} / {d.move?.run}</b></div>
+          <div className="kv"><span>{L("encumbrance", "sheet.encumbrance")}</span><b>{st.encumbrance?.current} / {st.encumbrance?.max}</b></div>
+          <div className="kv"><span>{L("criticalWounds", "sheet.criticals")}</span><b>{st.criticalWounds?.value} / {st.criticalWounds?.max}</b></div>
+          <div className="kv"><span>{L("experience", "sheet.exp")}</span><b>{d.experience?.current} {t("sheet.expFree")} / {d.experience?.total}</b></div>
+          {d.statusStanding ? <div className="kv"><span>{L("status", "sheet.status")}</span><b>{d.statusText} {d.statusStanding}</b></div> : null}
         </div>
       </Card>
 
+      <Lightbox src={zoom} onClose={() => setZoom(null)} />
+
       {sheet.careers?.length ? (
-        <Section title={t("sheet.careers")}>
+        <Section title={L("careers", "sheet.careers")}>
           {sheet.careers.map((c: any) => (
             <Row
               key={c.id}
@@ -213,6 +235,7 @@ function Resource(props: { label: string; path: string; value: number; max?: num
 
 function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
   const t = useT();
+  const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
   const [query, setQuery] = React.useState("");
   const match = (list: any[]) => list.filter(x => x.name.toLowerCase().includes(query.trim().toLowerCase()));
@@ -244,7 +267,7 @@ function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
     <>
       <input placeholder={t("sheet.search")} value={query} onChange={e => setQuery(e.target.value)} style={{ marginBottom: "0.6rem" }} />
       {sheet.extendedTests?.length ? (
-        <Section title={t("sheet.extendedTests")}>
+        <Section title={L("extendedTests", "sheet.extendedTests")}>
           {sheet.extendedTests.map((x: any) => (
             <Row
               key={x.id}
@@ -257,8 +280,8 @@ function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
           ))}
         </Section>
       ) : null}
-      {list(t("sheet.basicSkills"), match(sheet.skills?.basic ?? []))}
-      {list(t("sheet.advancedSkills"), match(sheet.skills?.advanced ?? []))}
+      {list(L("basicSkills", "sheet.basicSkills"), match(sheet.skills?.basic ?? []))}
+      {list(L("advancedSkills", "sheet.advancedSkills"), match(sheet.skills?.advanced ?? []))}
     </>
   );
 }
@@ -267,10 +290,11 @@ function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
 
 function TalentsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
   const t = useT();
+  const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
   return (
     <>
-      <Section title={t("sheet.traits")}>
+      <Section title={L("traits", "sheet.traits")}>
         {(sheet.traits ?? []).length ? sheet.traits.map((x: any) => (
           <Row
             key={x.id}
@@ -284,7 +308,7 @@ function TalentsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => 
         )) : <Empty text={t("sheet.empty")} />}
       </Section>
 
-      <Section title={t("sheet.tab.talents")}>
+      <Section title={L("talents", "sheet.tab.talents")}>
         {(sheet.talents ?? []).length ? sheet.talents.map((x: any) => (
           <Row key={x.id} img={x.img} name={x.name} sub={x.tests} detail={x} right={<span className="num">{x.advances}{x.max ? ` / ${x.max}` : ""}</span>} />
         )) : <Empty text={t("sheet.empty")} />}
@@ -297,6 +321,7 @@ function TalentsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => 
 
 function CombatTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
   const t = useT();
+  const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
   const weapons: any[] = sheet.weapons ?? [];
   const armour = sheet.status?.armour ?? { locations: [] };
@@ -322,16 +347,16 @@ function CombatTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
     <>
       <Card>
         <div className="row spread">
-          <b>{t("sheet.advantage")}</b>
+          <b>{L("advantage", "sheet.advantage")}</b>
           <Step value={sheet.status?.advantage?.value ?? 0} onStep={d => void edit("system.status.advantage.value", d, undefined, "step")} />
         </div>
       </Card>
 
-      <Section title={t("sheet.melee")}>
+      <Section title={L("meleeWeapons", "sheet.melee")}>
         {melee.length ? melee.map(weaponRow) : <Empty text={t("sheet.empty")} />}
       </Section>
 
-      <Section title={t("sheet.ranged")}>
+      <Section title={L("rangedWeapons", "sheet.ranged")}>
         {ranged.length ? ranged.map(w => (
           <div key={w.id}>
             {weaponRow(w)}
@@ -353,7 +378,7 @@ function CombatTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
         )) : <Empty text={t("sheet.empty")} />}
       </Section>
 
-      <Section title={t("sheet.armour")} right={armour.shield ? <span className="small muted">{t("sheet.shield")} {armour.shield}</span> : undefined}>
+      <Section title={L("armour", "sheet.armour")} right={armour.shield ? <span className="small muted">{t("sheet.shield")} {armour.shield}</span> : undefined}>
         <div className="aplist">
           {(armour.locations ?? []).map((l: any) => (
             <div key={l.key} className="res">
@@ -389,6 +414,7 @@ function CombatTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
 
 function EffectsTab({ sheet }: { sheet: any }) {
   const t = useT();
+  const L = useSheetLabels(sheet);
   const toggleCondition = useStore(s => s.toggleCondition);
   const edit = useStore(s => s.edit);
 
@@ -406,7 +432,7 @@ function EffectsTab({ sheet }: { sheet: any }) {
 
   return (
     <>
-      <Section title={t("sheet.conditions")}>
+      <Section title={L("conditions", "sheet.conditions")}>
         <div className="condgrid">
           {(sheet.conditions ?? []).map((c: any) => (
             <div key={c.key} className={`cond ${c.active ? "on" : ""}`}>
@@ -451,6 +477,7 @@ function EffectsTab({ sheet }: { sheet: any }) {
 
 function MagicTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
   const t = useT();
+  const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
 
   const spellRow = (x: any, lore: boolean) => (
@@ -495,12 +522,17 @@ function MagicTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => vo
 
   return (
     <>
-      <Section title={t("sheet.petty")}>
+      <Section title={L("pettySpell", "sheet.petty")}>
         {(sheet.spells?.petty ?? []).length ? sheet.spells.petty.map((x: any) => spellRow(x, false)) : <Empty text={t("sheet.empty")} />}
       </Section>
-      <Section title={t("sheet.loreSpells")}>
+      <Section title={L("loreSpell", "sheet.loreSpells")}>
         {(sheet.spells?.lore ?? []).length ? sheet.spells.lore.map((x: any) => spellRow(x, true)) : <Empty text={t("sheet.empty")} />}
       </Section>
+      {(sheet.spells?.cants ?? []).length ? (
+        <Section title={L("cants", "sheet.cants")}>
+          {sheet.spells.cants.map((x: any) => spellRow(x, false))}
+        </Section>
+      ) : null}
     </>
   );
 }
@@ -509,6 +541,7 @@ function MagicTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => vo
 
 function ReligionTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
   const t = useT();
+  const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
 
   const prayerRow = (x: any) => (
@@ -526,19 +559,19 @@ function ReligionTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) =>
     <>
       <Card>
         <label className="field">
-          <span>{t("sheet.god")}</span>
+          <span>{L("blessedBy", "sheet.god")}</span>
           <TextEdit value={sheet.details?.god ?? ""} onCommit={v => void edit("system.details.god.value", v)} />
         </label>
         <div className="row spread">
-          <b>{t("sheet.sin")}</b>
+          <b>{L("sin", "sheet.sin")}</b>
           <Step value={sheet.status?.sin?.value ?? 0} onStep={d => void edit("system.status.sin.value", d, undefined, "step")} />
         </div>
       </Card>
 
-      <Section title={t("sheet.blessings")}>
+      <Section title={L("blessing", "sheet.blessings")}>
         {(sheet.prayers?.blessing ?? []).length ? sheet.prayers.blessing.map(prayerRow) : <Empty text={t("sheet.empty")} />}
       </Section>
-      <Section title={t("sheet.miracles")}>
+      <Section title={L("miracle", "sheet.miracles")}>
         {(sheet.prayers?.miracle ?? []).length ? sheet.prayers.miracle.map(prayerRow) : <Empty text={t("sheet.empty")} />}
       </Section>
     </>
@@ -549,6 +582,7 @@ function ReligionTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) =>
 
 function TrappingsTab({ sheet }: { sheet: any }) {
   const t = useT();
+  const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
   const inv = sheet.inventory ?? { categories: [], containers: [], money: { items: [] } };
   const enc = sheet.status?.encumbrance ?? { current: 0, max: 0, state: 0 };
@@ -574,7 +608,7 @@ function TrappingsTab({ sheet }: { sheet: any }) {
     <>
       <Card>
         <div className="row spread">
-          <b>{t("sheet.encumbrance")}</b>
+          <b>{L("encumbrance", "sheet.encumbrance")}</b>
           <span>{enc.current} / {enc.max}</span>
         </div>
         <div className="bar" style={{ marginTop: "0.3rem" }}>
@@ -583,7 +617,7 @@ function TrappingsTab({ sheet }: { sheet: any }) {
         <div className="small muted" style={{ marginTop: "0.25rem" }}>{t(`sheet.enc${stateKey}`)}</div>
       </Card>
 
-      <Section title={t("sheet.money")} right={<span className="small muted">{t("sheet.total")}: {inv.money?.total ?? 0}d</span>}>
+      <Section title={L("money", "sheet.money")} right={<span className="small muted">{t("sheet.total")}: {inv.money?.total ?? 0}d</span>}>
         {(inv.money?.items ?? []).length ? inv.money.items.map((m: any) => itemRow(m, false)) : <Empty text={t("sheet.empty")} />}
       </Section>
 
@@ -610,6 +644,14 @@ function TrappingsTab({ sheet }: { sheet: any }) {
           ))}
         </Section>
       ) : null}
+
+      {(sheet.extras ?? []).length ? (
+        <Section title={t("sheet.extras")}>
+          {sheet.extras.map((item: any) => (
+            <Row key={item.id} img={item.img} name={item.name} sub={item.typeLabel} detail={item} />
+          ))}
+        </Section>
+      ) : null}
     </>
   );
 }
@@ -618,6 +660,7 @@ function TrappingsTab({ sheet }: { sheet: any }) {
 
 function NotesTab({ sheet }: { sheet: any }) {
   const t = useT();
+  const L = useSheetLabels(sheet);
   const edit = useStore(s => s.edit);
   const d = sheet.details ?? {};
 
@@ -625,7 +668,7 @@ function NotesTab({ sheet }: { sheet: any }) {
     <>
       <Card>
         <label className="field">
-          <span>{t("sheet.motivation")}</span>
+          <span>{L("motivation", "sheet.motivation")}</span>
           <TextEdit value={d.motivation ?? ""} onCommit={v => void edit("system.details.motivation.value", v)} />
         </label>
       </Card>
@@ -653,7 +696,7 @@ function NotesTab({ sheet }: { sheet: any }) {
       </Section>
 
       {d.biography ? (
-        <Section title={t("sheet.biography")}>
+        <Section title={L("biography", "sheet.biography")}>
           <div className="detail" style={{ margin: 0, borderRadius: 8, borderTop: "1px solid var(--line)" }}>
             <Html html={d.biography} />
           </div>

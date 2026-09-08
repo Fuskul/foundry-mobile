@@ -1,16 +1,14 @@
 import React from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useStore } from "./store";
-import { useT } from "./ui/common";
+import { useT, useSwipe } from "./ui/common";
 import { Connect } from "./screens/Connect";
 import { Character } from "./screens/Character";
-import { Dice } from "./screens/Dice";
 import { Chat } from "./screens/Chat";
 import { Settings } from "./screens/Settings";
 
 const TABS = [
   { id: "character", glyph: "🛡" },
-  { id: "dice", glyph: "🎲" },
   { id: "chat", glyph: "💬" },
   { id: "settings", glyph: "⚙" }
 ] as const;
@@ -20,6 +18,14 @@ export function App() {
   const s = useStore();
 
   React.useEffect(() => { void s.restore(); }, []);
+
+  // Swiping sideways walks the bottom tabs, the way phone apps normally behave.
+  const step = (delta: number) => {
+    const index = TABS.findIndex(tab => tab.id === s.tab);
+    const next = TABS[Math.min(TABS.length - 1, Math.max(0, index + delta))];
+    if (next && next.id !== s.tab) s.setTab(next.id);
+  };
+  const swipe = useSwipe(() => step(1), () => step(-1));
 
   // A sleeping phone misses everything the socket would have delivered, so the
   // moment the app comes back we reopen the connection and refill the chat.
@@ -52,9 +58,8 @@ export function App() {
         <h1 className="serif">{s.sheet?.name ?? t("app.name")}</h1>
       </header>
 
-      <main className="content">
+      <main className="content" {...swipe}>
         {s.tab === "character" ? <Character /> : null}
-        {s.tab === "dice" ? <Dice /> : null}
         {s.tab === "chat" ? <Chat /> : null}
         {s.tab === "settings" ? <Settings /> : null}
       </main>

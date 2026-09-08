@@ -31,8 +31,14 @@ export function RollDialog({ target, onClose }: { target: RollTarget | null; onC
   }, [target?.key, target?.kind]);
 
   const difficulties: Record<string, string> = config?.difficultyLabels ?? {};
-  const rollModes: Record<string, string> = config?.rollModes ?? {
-    publicroll: "Public", gmroll: "GM", blindroll: "Blind", selfroll: "Self"
+  // The world's own wording wins where it exists; the app's wording fills the gaps,
+  // so a visibility option is never shown as a bare key.
+  const rollModes: Record<string, string> = {
+    publicroll: t("roll.mode.publicroll"),
+    gmroll: t("roll.mode.gmroll"),
+    blindroll: t("roll.mode.blindroll"),
+    selfroll: t("roll.mode.selfroll"),
+    ...(config?.rollModes ?? {})
   };
 
   async function go() {

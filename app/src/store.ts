@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { Preferences } from "@capacitor/preferences";
 import { FoundryConnection, type ServerStatus, type JoinUser } from "./foundry/client";
-import { defaultBase } from "./foundry/http";
+import { defaultBase, http, normaliseBase } from "./foundry/http";
 import { Bridge, type BridgeInfo } from "./foundry/bridge";
 import { detectLang, type Lang } from "./i18n";
 
@@ -21,8 +21,19 @@ export interface ChatEntry {
 
 export type Theme = "dark" | "light" | "system";
 
+export interface ServerEntry { url: string; name: string }
+export interface ServerStatus2 {
+  checking?: boolean;
+  online?: boolean;
+  version?: string;
+  system?: string;
+  systemVersion?: string;
+  world?: string;
+  players?: number;
+}
+
 export type Phase = "connect" | "app";
-export type Tab = "character" | "dice" | "chat" | "settings";
+export type Tab = "character" | "chat" | "settings";
 
 interface State {
   lang: Lang;
@@ -31,7 +42,8 @@ interface State {
   tab: Tab;
 
   base: string;
-  servers: string[];
+  servers: ServerEntry[];
+  serverStatus: Record<string, ServerStatus2>;
   users: JoinUser[];
   usersError: string;
   worldTitle: string;
@@ -69,6 +81,9 @@ interface State {
 
   restore: () => Promise<void>;
   forgetServer: (base: string) => void;
+  addServer: (url: string, name: string) => void;
+  renameServer: (url: string, name: string) => void;
+  checkServers: () => Promise<void>;
   probe: (base: string) => Promise<void>;
   login: () => Promise<void>;
   logout: () => Promise<void>;
@@ -89,6 +104,7 @@ export const useStore = create<State>((set, get) => ({
 
   base: defaultBase(),
   servers: [],
+  serverStatus: {},
   users: [],
   usersError: "",
   worldTitle: "",
@@ -178,21 +194,60 @@ export const useStore = create<State>((set, get) => ({
         lang: saved.lang ?? detectLang(),
         theme: saved.theme ?? "dark",
         base: defaultBase() || saved.base || "",
-        servers: Array.isArray(saved.servers) ? saved.servers : (saved.base ? [saved.base] : []),
+        servers: readServers(saved),
         userId: saved.userId ?? "",
         username: saved.username ?? "",
         password: saved.password ?? "",
         remember: saved.remember ?? true
       });
       applyTheme(saved.theme ?? "dark");
+      void get().checkServers();
       if (defaultBase()) void get().probe(defaultBase());
     } catch { /* first run */ }
   },
 
   forgetServer(base) {
-    const servers = get().servers.filter(s => s !== base);
+    const servers = get().servers.filter(s => s.url !== base);
     set({ servers });
     void persist({ ...get(), servers });
+  },
+
+  addServer(url, name) {
+    const clean = normaliseBase(url);
+    if (!clean) return;
+    const servers = [...get().servers.filter(s => s.url !== clean), { url: clean, name: name.trim() || hostOf(clean) }];
+    set({ servers });
+    void persist({ ...get(), servers });
+    void get().checkServers();
+  },
+
+  renameServer(url, name) {
+    const servers = get().servers.map(s => (s.url === url ? { ...s, name: name.trim() || hostOf(url) } : s));
+    set({ servers });
+    void persist({ ...get(), servers });
+  },
+
+  /** Ping every saved address so the list can show who is up, like FLC does. */
+  async checkServers() {
+    const servers = get().servers;
+    set({ serverStatus: Object.fromEntries(servers.map(s => [s.url, { ...get().serverStatus[s.url], checking: true }])) });
+    await Promise.all(servers.map(async entry => {
+      let status: ServerStatus2 = { online: false, checking: false };
+      try {
+        const res = await http({ url: `${entry.url}/api/status` });
+        const data = JSON.parse(res.data);
+        status = {
+          checking: false,
+          online: data?.active !== false,
+          version: data?.version,
+          system: data?.system,
+          systemVersion: data?.systemVersion,
+          world: data?.world,
+          players: data?.activeUsers ?? data?.users
+        };
+      } catch { /* stays offline */ }
+      set(s => ({ serverStatus: { ...s.serverStatus, [entry.url]: status } }));
+    }));
   },
 
   async probe(base) {
@@ -200,7 +255,10 @@ export const useStore = create<State>((set, get) => ({
     try {
       const { status, users } = await conn.probe(base);
       const saved = get().userId;
-      const servers = [conn.base, ...get().servers.filter(s => s !== conn.base)].slice(0, 8);
+      const known = get().servers;
+      const servers = known.some(s => s.url === conn.base)
+        ? known
+        : [...known, { url: conn.base, name: hostOf(conn.base) }].slice(0, 12);
       set({
         status,
         users,
@@ -308,6 +366,18 @@ async function persist(state: Pick<State, "lang" | "theme" | "base" | "servers" 
 function readChat(world: any): ChatEntry[] {
   const messages: any[] = world?.messages ?? [];
   return mergeChat([], messages.slice(-200).map(toEntry).filter(Boolean) as ChatEntry[]);
+}
+
+function hostOf(url: string): string {
+  try { return new URL(url).host; } catch { return url.replace(/^https?:\/\//, ""); }
+}
+
+/** Older versions stored plain addresses; keep those working. */
+function readServers(saved: any): ServerEntry[] {
+  const list = Array.isArray(saved?.servers) ? saved.servers : saved?.base ? [saved.base] : [];
+  return list
+    .map((entry: any) => (typeof entry === "string" ? { url: entry, name: hostOf(entry) } : entry))
+    .filter((entry: any) => entry?.url);
 }
 
 function applyTheme(theme: Theme) {

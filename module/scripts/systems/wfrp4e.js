@@ -4,7 +4,18 @@ import { safe, rollModes } from "./generic.js";
 const CHAR_ORDER = ["ws", "bs", "s", "t", "i", "ag", "dex", "int", "wp", "fel"];
 
 /** Hit locations, in the order the desktop sheet lays them out. */
-const LOCATIONS = ["head", "body", "rArm", "lArm", "rLeg", "lLeg"];
+const CORE_LOCATIONS = ["head", "body", "rArm", "lArm", "rLeg", "lLeg"];
+
+/**
+ * Modules and creature types add hit locations of their own (tails, wings,
+ * extra limbs), so the human ones come first and anything else the actor
+ * actually carries armour on follows.
+ */
+function hitLocations(armour) {
+  const extra = Object.keys(armour ?? {})
+    .filter(key => !CORE_LOCATIONS.includes(key) && armour[key] && typeof armour[key] === "object" && "value" in armour[key]);
+  return [...CORE_LOCATIONS, ...extra];
+}
 
 const n = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const arr = v => (Array.isArray(v) ? v : v == null || v === "" ? [] : [v]);
@@ -37,9 +48,86 @@ async function summary(item, actor) {
   }
 }
 
+/**
+ * Item types the sheet already shows somewhere. Anything else — a vehicle part
+ * from Sea of Claws, an arcane mark from Winds of Magic, a custom item from a
+ * third-party compendium — is collected into "extras" so no module's content
+ * silently disappears from the phone.
+ */
+const SHOWN_TYPES = new Set([
+  "skill", "talent", "trait", "career", "weapon", "armour", "ammunition",
+  "trapping", "container", "money", "spell", "prayer", "critical", "injury",
+  "disease", "psychology", "mutation", "extendedTest"
+]);
+
+/** The world's own name for an item type, or the raw type when it has none. */
+function typeName(type) {
+  for (const key of [`TYPES.Item.${type}`, `ITEM.Type${type.charAt(0).toUpperCase()}${type.slice(1)}`]) {
+    const text = game.i18n.localize(key);
+    if (text && text !== key) return text;
+  }
+  return type;
+}
+
+async function extraItems(actor) {
+  const out = [];
+  for (const i of actor.items) {
+    if (SHOWN_TYPES.has(i.type)) continue;
+    out.push({
+      id: i.id,
+      name: i.name,
+      img: i.img,
+      type: i.type,
+      typeLabel: typeName(i.type),
+      quantity: n(i.system?.quantity?.value, null),
+      ...(await summary(i, actor))
+    });
+  }
+  return out.sort((a, b) => (a.typeLabel + a.name).localeCompare(b.typeLabel + b.name));
+}
+
 function descriptionOf(item) {
   const raw = item?.system?.description?.value ?? "";
   return typeof raw === "string" ? raw : "";
+}
+
+/**
+ * Section and field names taken from Foundry's own localisation, so the phone
+ * shows exactly the terms the player sees at the table — including whatever
+ * translation module the world uses. Keys that the world cannot translate are
+ * left out and the app falls back to its own wording.
+ */
+const LABEL_KEYS = {
+  wounds: "Wounds", advantage: "Advantage", fate: "Fate", fortune: "Fortune",
+  resilience: "Resilience", resolve: "Resolve", corruption: "Corruption", sin: "Sin",
+  movement: "Movement", encumbrance: "Encumbrance", experience: "Experience",
+  main: "Main", skills: "Skills", basicSkills: "Basic Skills",
+  advancedSkills: "Grouped & Advanced Skills", talents: "Talents", traits: "Traits",
+  combat: "Combat", effects: "Effects", magic: "Magic", religion: "Religion",
+  trappings: "Trappings", notes: "Notes", armour: "Armour", money: "Money",
+  careers: "Careers", career: "Career", status: "Status", species: "Species",
+  gender: "Gender", blessing: "Blessing", miracle: "Miracle", injury: "Injury",
+  criticals: "Criticals", psychology: "Psychology", disease: "Disease",
+  mutation: "Corruption&Mutation", qualities: "Qualities", flaws: "Flaws",
+  damage: "Damage", range: "Range", target: "Target", duration: "Duration",
+  equipped: "Equipped", worn: "Worn", quantity: "Quantity", total: "Total",
+  charAbbrev: "SHEET.CharAbbrev", advAbbrev: "SHEET.AdvAbbrev", ap: "AP",
+  successLevels: "SuccessLevels", extendedTests: "Extended Tests",
+  pettySpell: "SHEET.PettySpell", loreSpell: "SHEET.LoreSpell", cants: "SHEET.Cants",
+  blessedBy: "Blessed By", memorized: "Memorized", initial: "Initial",
+  advances: "Advances", modifier: "Modifier", current: "Current", complete: "Complete",
+  meleeWeapons: "SHEET.MeleeWeapons", rangedWeapons: "SHEET.RangedWeapons",
+  conditions: "SHEET.Conditions", biography: "Biography", motivation: "Motivation",
+  criticalWounds: "Critical Wounds", ammunition: "Ammunition"
+};
+
+function labels() {
+  const out = {};
+  for (const [name, key] of Object.entries(LABEL_KEYS)) {
+    const text = game.i18n.localize(key);
+    if (text && text !== key) out[name] = text;
+  }
+  return out;
 }
 
 export const wfrp4eAdapter = {
@@ -89,6 +177,7 @@ export const wfrp4eAdapter = {
 
     return {
       adapter: "wfrp4e",
+      labels: labels(),
       id: actor.id,
       uuid: actor.uuid,
       name: actor.name,
@@ -158,7 +247,7 @@ export const wfrp4eAdapter = {
       }),
 
       status: {
-        wounds: { value: n(st.wounds?.value), max: n(st.wounds?.max), auto: !!auto.wounds },
+        wounds: { value: n(st.wounds?.value), max: n(st.wounds?.max), auto: !!auto.wounds, label: loc(st.wounds?.label) },
         advantage: { value: n(st.advantage?.value), max: n(st.advantage?.max, 10) },
         fate: { value: n(st.fate?.value) },
         fortune: { value: n(st.fortune?.value) },
@@ -194,6 +283,7 @@ export const wfrp4eAdapter = {
       effects: await guard("effects", () => effectList(actor), { temporary: [], passive: [], disabled: [] }),
       conditions: await guard("conditions", () => conditionList(actor), []),
       experienceLog: await guard("experienceLog", () => experienceLog(actor), []),
+      extras: await guard("extras", () => extraItems(actor), []),
       hasSpells: !!actor.itemTypes.spell.length,
       hasPrayers: !!actor.itemTypes.prayer.length
     };
@@ -449,6 +539,7 @@ async function spellLists(actor) {
     return {
       id: s.id, name: s.name, img: s.img,
       petty: lores.includes("petty"),
+      cant: lores.includes("cant"),
       lores: lores.map(l => ({ key: l, label: game.wfrp4e?.config?.magicLores?.[l] ?? l })),
       chosenLore: clean(s.system.lore?.chosen),
       cn: n(s.system.cn?.value),
@@ -465,7 +556,11 @@ async function spellLists(actor) {
     };
   }));
   const sorted = all.sort((a, b) => a.name.localeCompare(b.name, game.i18n.lang));
-  return { petty: sorted.filter(s => s.petty), lore: sorted.filter(s => !s.petty) };
+  return {
+    petty: sorted.filter(s => s.petty),
+    cants: sorted.filter(s => s.cant),
+    lore: sorted.filter(s => !s.petty && !s.cant)
+  };
 }
 
 async function prayerLists(actor) {
@@ -614,7 +709,7 @@ async function fallbackInventory(actor) {
 function armourPoints(actor) {
   const src = actor.system?.status?.armour ?? {};
   const out = { shield: n(src.shield), shieldDamage: n(src.shieldDamage), locations: [] };
-  for (const key of LOCATIONS) {
+  for (const key of hitLocations(src)) {
     const value = src[key];
     if (!value || value.show === false) continue;
     out.locations.push({

@@ -47,13 +47,24 @@ export const genericAdapter = {
   }
 };
 
+/**
+ * Roll-visibility names as this world spells them. A key that the world cannot
+ * translate is left out entirely, so the phone shows its own wording instead of
+ * a bare localisation key.
+ */
 export function rollModes() {
-  return {
-    publicroll: game.i18n.localize("CHAT.RollPublic"),
-    gmroll: game.i18n.localize("CHAT.RollPrivate"),
-    blindroll: game.i18n.localize("CHAT.RollBlind"),
-    selfroll: game.i18n.localize("CHAT.RollSelf")
+  const keys = {
+    publicroll: "CHAT.RollPublic",
+    gmroll: "CHAT.RollPrivate",
+    blindroll: "CHAT.RollBlind",
+    selfroll: "CHAT.RollSelf"
   };
+  const out = {};
+  for (const [mode, key] of Object.entries(keys)) {
+    const text = game.i18n.localize(key);
+    if (text && text !== key) out[mode] = text;
+  }
+  return out;
 }
 
 /** Strip anything that cannot survive structured cloning over the socket. */
