@@ -32,6 +32,7 @@ export class FoundryConnection {
   userId = "";
   userName = "";
   joinError = "";
+  worldTitle = "";
   world: any = null;
   logs: LogLine[] = [];
 
@@ -133,6 +134,7 @@ export class FoundryConnection {
         asked += 1;
         this.log("info", `asking for the user list (${why}, attempt ${asked})`);
         socket.emit("getJoinData", (data: any) => {
+          this.worldTitle = String(data?.world?.title ?? data?.world?.id ?? "");
           const users: JoinUser[] = (data?.users ?? []).map((u: any) => ({
             id: u._id ?? u.id,
             name: u.name,

@@ -4,7 +4,7 @@ import { bridge, useStore } from "../store";
 
 export interface RollTarget {
   actorId: string;
-  kind: "characteristic" | "skill" | "weapon" | "trait" | "cast" | "channel" | "prayer" | "item";
+  kind: "characteristic" | "skill" | "weapon" | "trait" | "cast" | "channel" | "prayer" | "item" | "extended";
   key: string;
   name: string;
   subtitle?: string;

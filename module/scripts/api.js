@@ -71,7 +71,71 @@ export const HANDLERS = {
   /** Full prepared sheet payload. */
   async sheet({ payload, user }) {
     const actor = requireActor(payload?.actorId, user);
-    return safe(getAdapter().sheet(actor));
+    return safe(await getAdapter().sheet(actor));
+  },
+
+  /** Write one whitelisted field on the actor or on one of its items. */
+  async edit({ payload, user }) {
+    const actor = requireActor(payload?.actorId, user);
+    if (!game.settings.get(MODULE_ID, "allowEdits")) throw new Error("Editing is disabled by the GM");
+    const adapter = getAdapter();
+    if (!adapter.edit) throw new Error("This system adapter cannot edit");
+    return safe(await adapter.edit(actor, {
+      itemId: payload?.itemId,
+      path: payload?.path,
+      value: payload?.value,
+      mode: payload?.mode ?? "set"
+    }));
+  },
+
+  /** Add or remove a condition. */
+  async condition({ payload, user }) {
+    const actor = requireActor(payload?.actorId, user);
+    if (!game.settings.get(MODULE_ID, "allowEdits")) throw new Error("Editing is disabled by the GM");
+    const adapter = getAdapter();
+    if (!adapter.condition) throw new Error("This system adapter has no conditions");
+    return safe(await adapter.condition(actor, { key: payload?.key, remove: payload?.remove }));
+  },
+
+  /** Recent chat, so a phone that was asleep can catch up. */
+  async chatlog({ payload, user }) {
+    const limit = Math.min(Math.max(Number(payload?.limit) || 60, 1), 200);
+    const since = Number(payload?.since) || 0;
+    return safe(game.messages.contents
+      .filter(m => m.timestamp > since)
+      .filter(m => m.visible ?? !(m.whisper?.length && !m.whisper.includes(user.id) && m.author?.id !== user.id))
+      .slice(-limit)
+      .map(m => ({
+        _id: m.id,
+        content: m.content,
+        flavor: m.flavor,
+        speaker: m.speaker,
+        timestamp: m.timestamp,
+        whisper: m.whisper ?? [],
+        blind: !!m.blind,
+        rolls: (m.rolls ?? []).map(r => ({ formula: r.formula, total: r.total }))
+      })));
+  },
+
+  /**
+   * Press a button on a chat card. The card's own handlers live in this client,
+   * so the reliable way to trigger one is to click it where it is rendered.
+   */
+  async cardAction({ payload, user }) {
+    const messageId = String(payload?.messageId ?? "");
+    const action = String(payload?.action ?? "");
+    const index = Number(payload?.index ?? 0);
+    if (!messageId || !action) throw new Error("Message or action missing");
+    const message = game.messages.get(messageId);
+    if (!message) throw new Error("Message not found");
+
+    const root = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!root) throw new Error("That message is not on screen in the host client");
+    const buttons = [...root.querySelectorAll(`[data-action="${action}"]`)];
+    const button = buttons[index] ?? buttons[0];
+    if (!button) throw new Error(`No "${action}" button on that card`);
+    button.click();
+    return { messageId, action, pressed: true, by: user.name };
   },
 
   /** Execute a real system test and post the normal chat card. */

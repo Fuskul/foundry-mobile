@@ -17,6 +17,10 @@ Hooks.once("init", () => {
     name: "FVTTMB.Setting.AllowRolls", hint: "FVTTMB.Setting.AllowRollsHint",
     scope: "world", config: true, type: Boolean, default: true
   });
+  s("allowEdits", {
+    name: "FVTTMB.Setting.AllowEdits", hint: "FVTTMB.Setting.AllowEditsHint",
+    scope: "world", config: true, type: Boolean, default: true
+  });
   s("requireOwnership", {
     name: "FVTTMB.Setting.RequireOwnership", hint: "FVTTMB.Setting.RequireOwnershipHint",
     scope: "world", config: true, type: Boolean, default: true

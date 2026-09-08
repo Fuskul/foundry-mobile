@@ -16,13 +16,17 @@ export interface ChatEntry {
   timestamp: number;
   whisper: string[];
   blind: boolean;
+  rolls: { formula: string; total: number }[];
 }
+
+export type Theme = "dark" | "light" | "system";
 
 export type Phase = "connect" | "app";
 export type Tab = "character" | "dice" | "chat" | "settings";
 
 interface State {
   lang: Lang;
+  theme: Theme;
   phase: Phase;
   tab: Tab;
 
@@ -30,6 +34,7 @@ interface State {
   servers: string[];
   users: JoinUser[];
   usersError: string;
+  worldTitle: string;
   userId: string;
   username: string;
   password: string;
@@ -55,6 +60,10 @@ interface State {
   chat: ChatEntry[];
 
   setLang: (lang: Lang) => void;
+  setTheme: (theme: Theme) => void;
+  edit: (path: string, value: unknown, itemId?: string, mode?: "set" | "toggle" | "step") => Promise<void>;
+  toggleCondition: (key: string, remove: boolean) => Promise<void>;
+  resync: () => Promise<void>;
   setTab: (tab: Tab) => void;
   setField: <K extends keyof State>(key: K, value: State[K]) => void;
 
@@ -74,6 +83,7 @@ const KEY = "foundry-mobile:settings";
 
 export const useStore = create<State>((set, get) => ({
   lang: detectLang(),
+  theme: "dark",
   phase: "connect",
   tab: "character",
 
@@ -81,6 +91,7 @@ export const useStore = create<State>((set, get) => ({
   servers: [],
   users: [],
   usersError: "",
+  worldTitle: "",
   userId: "",
   username: "",
   password: "",
@@ -106,6 +117,55 @@ export const useStore = create<State>((set, get) => ({
   chat: [],
 
   setLang: lang => { set({ lang }); void persist(get()); },
+
+  setTheme: theme => {
+    set({ theme });
+    applyTheme(theme);
+    void persist({ ...get(), theme });
+  },
+
+  /** Change one field on the sheet, then pull the recomputed sheet back. */
+  async edit(path, value, itemId, mode = "set") {
+    const actorId = get().actorId;
+    if (!actorId) return;
+    try {
+      await bridge.edit(actorId, path, value, itemId, mode);
+      await get().refreshSheet();
+    } catch (err) {
+      set({ sheetError: (err as Error).message });
+    }
+  },
+
+  async toggleCondition(key, remove) {
+    const actorId = get().actorId;
+    if (!actorId) return;
+    try {
+      await bridge.condition(actorId, key, remove);
+      await get().refreshSheet();
+    } catch (err) {
+      set({ sheetError: (err as Error).message });
+    }
+  },
+
+  /** Catch up after the phone was asleep: reconnect if needed, then refill chat. */
+  async resync() {
+    if (get().phase !== "app") return;
+    try {
+      if (!conn.connected) {
+        conn.log("info", "waking up: reopening the connection");
+        await conn.connect();
+        bridge.attach();
+        set({ connected: true });
+      }
+      const newest = get().chat.reduce((max, m) => Math.max(max, m.timestamp), 0);
+      const missed = await bridge.chatlog(newest);
+      const entries = (missed ?? []).map(toEntry).filter(Boolean) as ChatEntry[];
+      if (entries.length) set(s => ({ chat: mergeChat(s.chat, entries) }));
+      await get().refreshSheet();
+    } catch (err) {
+      conn.log("warn", `resync failed: ${String((err as Error).message ?? err)}`);
+    }
+  },
   setTab: tab => set({ tab }),
   setField: (key, value) => set({ [key]: value } as any),
 
@@ -116,6 +176,7 @@ export const useStore = create<State>((set, get) => ({
       const saved = JSON.parse(value);
       set({
         lang: saved.lang ?? detectLang(),
+        theme: saved.theme ?? "dark",
         base: defaultBase() || saved.base || "",
         servers: Array.isArray(saved.servers) ? saved.servers : (saved.base ? [saved.base] : []),
         userId: saved.userId ?? "",
@@ -123,6 +184,7 @@ export const useStore = create<State>((set, get) => ({
         password: saved.password ?? "",
         remember: saved.remember ?? true
       });
+      applyTheme(saved.theme ?? "dark");
       if (defaultBase()) void get().probe(defaultBase());
     } catch { /* first run */ }
   },
@@ -144,6 +206,7 @@ export const useStore = create<State>((set, get) => ({
         users,
         servers,
         usersError: conn.joinError,
+        worldTitle: conn.worldTitle,
         base: conn.base,
         busy: null,
         probed: true,
@@ -227,9 +290,10 @@ export const useStore = create<State>((set, get) => ({
   }
 }));
 
-async function persist(state: Pick<State, "lang" | "base" | "servers" | "userId" | "username" | "remember" | "password">) {
+async function persist(state: Pick<State, "lang" | "theme" | "base" | "servers" | "userId" | "username" | "remember" | "password">) {
   const payload = {
     lang: state.lang,
+    theme: state.theme,
     base: state.base,
     userId: state.userId,
     username: state.username,
@@ -246,6 +310,23 @@ function readChat(world: any): ChatEntry[] {
   return mergeChat([], messages.slice(-200).map(toEntry).filter(Boolean) as ChatEntry[]);
 }
 
+function applyTheme(theme: Theme) {
+  try { document.documentElement.dataset.theme = theme; } catch { /* not a browser */ }
+}
+
+/** Rolls travel either as objects or as JSON strings, depending on the route. */
+function readRolls(message: any): { formula: string; total: number }[] {
+  const raw = message?.rolls ?? [];
+  return (Array.isArray(raw) ? raw : [])
+    .map(r => {
+      if (typeof r === "string") { try { return JSON.parse(r); } catch { return null; } }
+      return r;
+    })
+    .filter(Boolean)
+    .map((r: any) => ({ formula: String(r.formula ?? ""), total: Number(r.total ?? 0) }))
+    .filter(r => r.formula || Number.isFinite(r.total));
+}
+
 export function toEntry(message: any): ChatEntry | null {
   if (!message) return null;
   return {
@@ -255,7 +336,8 @@ export function toEntry(message: any): ChatEntry | null {
     flavor: String(message.flavor ?? ""),
     timestamp: Number(message.timestamp ?? Date.now()),
     whisper: message.whisper ?? [],
-    blind: !!message.blind
+    blind: !!message.blind,
+    rolls: readRolls(message)
   };
 }
 

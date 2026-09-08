@@ -1,5 +1,5 @@
 import React from "react";
-import { useStore, conn } from "../store";
+import { useStore, conn, bridge } from "../store";
 import { useT, Html, Empty } from "../ui/common";
 
 export function Chat() {
@@ -15,6 +15,20 @@ export function Chat() {
   );
 
   React.useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [visible.length]);
+
+  // Card buttons still belong to Foundry, so we ask the bridge to press them.
+  async function onCardClick(event: React.MouseEvent<HTMLDivElement>, messageId: string) {
+    const el = (event.target as HTMLElement).closest("[data-action]") as HTMLElement | null;
+    if (!el) return;
+    event.preventDefault();
+    const action = el.dataset.action!;
+    const siblings = [...(event.currentTarget.querySelectorAll(`[data-action="${action}"]`))];
+    const index = Math.max(0, siblings.indexOf(el));
+    el.setAttribute("disabled", "true");
+    try { await bridge.cardAction(messageId, action, index); }
+    catch (err) { conn.log("warn", `card action "${action}" failed: ${(err as Error).message}`); }
+    finally { el.removeAttribute("disabled"); }
+  }
 
   async function send() {
     if (!text.trim()) return;
@@ -33,7 +47,19 @@ export function Chat() {
               {m.alias}
             </div>
             {m.flavor ? <div className="small muted">{m.flavor.replace(/<[^>]*>/g, "")}</div> : null}
-            <Html html={m.content} />
+            <div onClick={event => void onCardClick(event, m.id)}>
+              <Html html={m.content} />
+            </div>
+            {m.rolls.length && !/dice-total|chat-card/.test(m.content) ? (
+              <div className="rolls">
+                {m.rolls.map((roll, index) => (
+                  <React.Fragment key={index}>
+                    {roll.formula ? <span className="formula">{roll.formula}</span> : null}
+                    <span className="total">{roll.total}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+            ) : null}
           </div>
         )) : <Empty text={t("chat.empty")} />}
         <div ref={endRef} />

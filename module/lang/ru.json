@@ -20,5 +20,7 @@
   "FVTTMB.Setting.ExecutorAlways": "Всегда этот клиент",
   "FVTTMB.Setting.ExecutorNever": "Никогда",
   "FVTTMB.Setting.Verbose": "Подробный лог",
-  "FVTTMB.Setting.VerboseHint": "Писать каждый запрос моста в консоль браузера."
+  "FVTTMB.Setting.VerboseHint": "Писать каждый запрос моста в консоль браузера.",
+  "FVTTMB.Setting.AllowEdits": "Разрешить изменения из приложения",
+  "FVTTMB.Setting.AllowEditsHint": "Если выключено, с телефона можно кидать кубы и смотреть лист, но не менять его."
 }

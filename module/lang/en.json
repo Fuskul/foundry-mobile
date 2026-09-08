@@ -20,5 +20,7 @@
   "FVTTMB.Setting.ExecutorAlways": "Always this client",
   "FVTTMB.Setting.ExecutorNever": "Never",
   "FVTTMB.Setting.Verbose": "Verbose logging",
-  "FVTTMB.Setting.VerboseHint": "Write every bridge request to the browser console."
+  "FVTTMB.Setting.VerboseHint": "Write every bridge request to the browser console.",
+  "FVTTMB.Setting.AllowEdits": "Allow changes from the app",
+  "FVTTMB.Setting.AllowEditsHint": "When off, phones can roll and read the sheet but cannot change anything on it."
 }

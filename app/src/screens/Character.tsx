@@ -1,9 +1,12 @@
 import React from "react";
-import { useStore, bridge } from "../store";
+import { useStore } from "../store";
 import { useT, Card, Empty, Html } from "../ui/common";
+import { Section, Row, NumEdit, Step, Check, TextEdit, imgUrl } from "../ui/sheet";
 import { RollDialog, type RollTarget } from "../ui/RollDialog";
 
-type SheetTab = "main" | "skills" | "combat" | "talents" | "magic" | "items";
+type SheetTab = "main" | "skills" | "talents" | "combat" | "effects" | "magic" | "religion" | "trappings" | "notes";
+
+const ALL_TABS: SheetTab[] = ["main", "skills", "talents", "combat", "effects", "magic", "religion", "trappings", "notes"];
 
 export function Character() {
   const t = useT();
@@ -25,34 +28,27 @@ export function Character() {
   }
 
   const sheet = s.sheet;
+  const tabs = ALL_TABS.filter(id =>
+    (id !== "magic" || sheet?.hasSpells) && (id !== "religion" || sheet?.hasPrayers));
+  const active = tabs.includes(tab) ? tab : "main";
+  const roll = (next: RollTarget) => setTarget(next);
 
   return (
     <div>
       {s.actors.length > 1 ? (
         s.actors.length > 8 ? (
           <div className="row" style={{ marginBottom: "0.6rem", gap: "0.4rem" }}>
-            <select
-              className="grow"
-              value={s.actorId ?? ""}
-              onChange={event => void s.openActor(event.target.value)}
-            >
+            <select className="grow" value={s.actorId ?? ""} onChange={e => void s.openActor(e.target.value)}>
               {s.actors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
-            <button
-              className="btn ghost"
-              onClick={() => void s.loadActors(s.actorScope === "mine" ? "characters" : "mine")}
-            >
+            <button className="btn ghost" onClick={() => void s.loadActors(s.actorScope === "mine" ? "characters" : "mine")}>
               {s.actorScope === "mine" ? t("actors.showAll") : t("actors.showMine")}
             </button>
           </div>
         ) : (
           <div className="chips">
             {s.actors.map(a => (
-              <button
-                key={a.id}
-                className={`chip ${a.id === s.actorId ? "active" : ""}`}
-                onClick={() => void s.openActor(a.id)}
-              >
+              <button key={a.id} className={`chip ${a.id === s.actorId ? "active" : ""}`} onClick={() => void s.openActor(a.id)}>
                 {a.name}
               </button>
             ))}
@@ -64,19 +60,22 @@ export function Character() {
       {!sheet ? <p className="muted">{t("app.loading")}</p> : (
         <>
           <div className="chips">
-            {(["main", "skills", "combat", "talents", "magic", "items"] as SheetTab[]).map(id => (
-              <button key={id} className={`chip ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>
+            {tabs.map(id => (
+              <button key={id} className={`chip ${active === id ? "active" : ""}`} onClick={() => setTab(id)}>
                 {t(`sheet.tab.${id}`)}
               </button>
             ))}
           </div>
 
-          {tab === "main" ? <MainTab sheet={sheet} onRoll={setTarget} /> : null}
-          {tab === "skills" ? <SkillsTab sheet={sheet} onRoll={setTarget} /> : null}
-          {tab === "combat" ? <CombatTab sheet={sheet} onRoll={setTarget} /> : null}
-          {tab === "talents" ? <TalentsTab sheet={sheet} /> : null}
-          {tab === "magic" ? <MagicTab sheet={sheet} onRoll={setTarget} /> : null}
-          {tab === "items" ? <ItemsTab sheet={sheet} /> : null}
+          {active === "main" ? <MainTab sheet={sheet} onRoll={roll} /> : null}
+          {active === "skills" ? <SkillsTab sheet={sheet} onRoll={roll} /> : null}
+          {active === "talents" ? <TalentsTab sheet={sheet} onRoll={roll} /> : null}
+          {active === "combat" ? <CombatTab sheet={sheet} onRoll={roll} /> : null}
+          {active === "effects" ? <EffectsTab sheet={sheet} /> : null}
+          {active === "magic" ? <MagicTab sheet={sheet} onRoll={roll} /> : null}
+          {active === "religion" ? <ReligionTab sheet={sheet} onRoll={roll} /> : null}
+          {active === "trappings" ? <TrappingsTab sheet={sheet} /> : null}
+          {active === "notes" ? <NotesTab sheet={sheet} /> : null}
         </>
       )}
 
@@ -85,10 +84,12 @@ export function Character() {
   );
 }
 
-/* ------------------------------------------------------------------- main */
+/* -------------------------------------------------------------------- main */
 
-function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (target: RollTarget) => void }) {
+function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
   const t = useT();
+  const edit = useStore(s => s.edit);
+  const [editing, setEditing] = React.useState(false);
   const d = sheet.details ?? {};
   const st = sheet.status ?? {};
 
@@ -99,300 +100,576 @@ function MainTab({ sheet, onRoll }: { sheet: any; onRoll: (target: RollTarget) =
           {sheet.img ? <img src={imgUrl(sheet.img)} alt="" style={{ width: 54, height: 54, borderRadius: 8, objectFit: "cover" }} /> : null}
           <div className="grow">
             <div className="serif" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{sheet.name}</div>
-            <div className="small muted">{[d.species, d.career].filter(Boolean).join(" · ")}</div>
-            <div className="small muted">{[d.careerLevel, d.statusText].filter(Boolean).join(" · ")}</div>
+            <div className="small muted">{[d.species, d.subspecies].filter(Boolean).join(" · ")}</div>
+            <div className="small muted">{[d.career, d.careerLevel].filter(Boolean).join(" · ")}</div>
+            <div className="small muted">{[d.careerClass, d.statusText].filter(Boolean).join(" · ")}</div>
           </div>
+          <button className="btn ghost" onClick={() => setEditing(!editing)}>{editing ? t("sheet.done") : t("sheet.edit")}</button>
         </div>
 
-        <div className="chargrid">
-          {(sheet.characteristics ?? []).map((c: any) => (
-            <button
-              key={c.key}
-              className="charbox"
-              onClick={() => onRoll({ actorId: sheet.id, kind: "characteristic", key: c.key, name: c.label, subtitle: `${c.value} (${c.bonus})` })}
-            >
-              <div className="abbrev">{c.abbrev}</div>
-              <div className="value">{c.value}</div>
-              <div className="bonus">{c.bonus}</div>
-            </button>
-          ))}
-        </div>
+        {editing ? (
+          <div className="stack" style={{ gap: "0.35rem" }}>
+            <div className="row small muted" style={{ gap: "0.4rem" }}>
+              <span style={{ width: "3rem" }} />
+              <span style={{ width: 60, textAlign: "center" }}>{t("sheet.initial")}</span>
+              <span style={{ width: 60, textAlign: "center" }}>{t("sheet.advances")}</span>
+              <span style={{ width: 60, textAlign: "center" }}>{t("sheet.modifier")}</span>
+            </div>
+            {sheet.characteristics.map((c: any) => (
+              <div key={c.key} className="row" style={{ gap: "0.4rem" }}>
+                <b style={{ width: "3rem" }}>{c.abbrev}</b>
+                <NumEdit value={c.initial} onCommit={v => void edit(`system.characteristics.${c.key}.initial`, v)} />
+                <NumEdit value={c.advances} onCommit={v => void edit(`system.characteristics.${c.key}.advances`, v)} />
+                <NumEdit value={c.modifier} onCommit={v => void edit(`system.characteristics.${c.key}.modifier`, v)} />
+                <span className="grow" style={{ textAlign: "right", fontWeight: 700 }}>{c.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="chargrid">
+            {sheet.characteristics.map((c: any) => (
+              <button
+                key={c.key}
+                className="charbox"
+                onClick={() => onRoll({ actorId: sheet.id, kind: "characteristic", key: c.key, name: c.label, subtitle: `${c.value} (${c.bonus})` })}
+              >
+                <div className="abbrev">{c.abbrev}</div>
+                <div className="value">{c.value}</div>
+                <div className="bonus">{c.bonus}</div>
+              </button>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card>
         <div className="resgrid">
-          <Resource actorId={sheet.id} label={t("sheet.wounds")} path="system.status.wounds.value" value={st.wounds?.value ?? 0} max={st.wounds?.max} />
-          <Resource actorId={sheet.id} label={t("sheet.advantage")} path="system.status.advantage.value" value={st.advantage?.value ?? 0} step={1} />
-          <Resource actorId={sheet.id} label={t("sheet.fate")} path="system.status.fate.value" value={st.fate?.value ?? 0} step={1} />
-          <Resource actorId={sheet.id} label={t("sheet.fortune")} path="system.status.fortune.value" value={st.fortune?.value ?? 0} step={1} />
-          <Resource actorId={sheet.id} label={t("sheet.resilience")} path="system.status.resilience.value" value={st.resilience?.value ?? 0} step={1} />
-          <Resource actorId={sheet.id} label={t("sheet.resolve")} path="system.status.resolve.value" value={st.resolve?.value ?? 0} step={1} />
-          <Resource actorId={sheet.id} label={t("sheet.corruption")} path="system.status.corruption.value" value={st.corruption?.value ?? 0} step={1} />
-          <Resource actorId={sheet.id} label={t("sheet.sin")} path="system.status.sin.value" value={st.sin?.value ?? 0} step={1} />
+          <Resource label={t("sheet.wounds")} path="system.status.wounds.value" value={st.wounds?.value ?? 0} max={st.wounds?.max} />
+          <Resource label={t("sheet.advantage")} path="system.status.advantage.value" value={st.advantage?.value ?? 0} />
+          <Resource label={t("sheet.fate")} path="system.status.fate.value" value={st.fate?.value ?? 0} />
+          <Resource label={t("sheet.fortune")} path="system.status.fortune.value" value={st.fortune?.value ?? 0} />
+          <Resource label={t("sheet.resilience")} path="system.status.resilience.value" value={st.resilience?.value ?? 0} />
+          <Resource label={t("sheet.resolve")} path="system.status.resolve.value" value={st.resolve?.value ?? 0} />
+          <Resource label={t("sheet.corruption")} path="system.status.corruption.value" value={st.corruption?.value ?? 0} max={st.corruption?.max || undefined} />
+          <Resource label={t("sheet.sin")} path="system.status.sin.value" value={st.sin?.value ?? 0} />
         </div>
       </Card>
-
-      <Card title={t("sheet.armour")}>
-        <div className="row wrap">
-          {Object.entries(sheet.status?.armour ?? {}).map(([key, ap]: [string, any]) => (
-            <div key={key} className="res" style={{ flex: "1 1 30%" }}>
-              <div className="label">{ap.label ?? key}</div>
-              <div className="val">{ap.value ?? 0}</div>
-            </div>
-          ))}
-          {!Object.keys(sheet.status?.armour ?? {}).length ? <Empty text={t("sheet.empty")} /> : null}
-        </div>
-      </Card>
-
-      {sheet.conditions?.length ? (
-        <Card title={t("sheet.conditions")}>
-          {sheet.conditions.map((c: any) => (
-            <div key={c.id} className="rowitem">
-              {c.img ? <img src={imgUrl(c.img)} alt="" /> : null}
-              <span className="name">{c.name}</span>
-              {c.value != null ? <span className="num">{c.value}</span> : null}
-            </div>
-          ))}
-        </Card>
-      ) : null}
 
       <Card>
         <div className="stack small">
-          <div className="row spread"><span className="muted">{t("sheet.movement")}</span><b>{d.move?.value} / {d.move?.walk} / {d.move?.run}</b></div>
-          <div className="row spread"><span className="muted">{t("sheet.encumbrance")}</span><b>{st.encumbrance?.current ?? 0} / {st.encumbrance?.max ?? 0}</b></div>
-          <div className="row spread"><span className="muted">{t("sheet.criticals")}</span><b>{st.criticalWounds?.value ?? 0} / {st.criticalWounds?.max ?? 0}</b></div>
-          <div className="row spread"><span className="muted">{t("sheet.exp")}</span><b>{d.experience?.current ?? 0} {t("sheet.expFree")} / {d.experience?.total ?? 0}</b></div>
+          <div className="kv"><span>{t("sheet.movement")}</span><b>{d.move?.value} / {d.move?.walk} / {d.move?.run}</b></div>
+          <div className="kv"><span>{t("sheet.encumbrance")}</span><b>{st.encumbrance?.current} / {st.encumbrance?.max}</b></div>
+          <div className="kv"><span>{t("sheet.criticals")}</span><b>{st.criticalWounds?.value} / {st.criticalWounds?.max}</b></div>
+          <div className="kv"><span>{t("sheet.exp")}</span><b>{d.experience?.current} {t("sheet.expFree")} / {d.experience?.total}</b></div>
+          {d.statusStanding ? <div className="kv"><span>{t("sheet.status")}</span><b>{d.statusText} {d.statusStanding}</b></div> : null}
         </div>
       </Card>
+
+      {sheet.careers?.length ? (
+        <Section title={t("sheet.careers")}>
+          {sheet.careers.map((c: any) => (
+            <Row
+              key={c.id}
+              img={c.img}
+              name={c.name}
+              sub={[c.level, c.careerGroup].filter(Boolean).join(" · ")}
+              detail={c}
+              right={<span className="small muted">{c.current ? t("sheet.current") : c.complete ? t("sheet.complete") : ""}</span>}
+            />
+          ))}
+        </Section>
+      ) : null}
     </>
   );
 }
 
-function Resource(props: { actorId: string; label: string; path: string; value: number; max?: number; step?: number }) {
+function Resource(props: { label: string; path: string; value: number; max?: number }) {
+  const edit = useStore(s => s.edit);
   const [value, setValue] = React.useState(props.value);
   React.useEffect(() => setValue(props.value), [props.value]);
-  const step = props.step ?? 1;
 
-  const change = async (delta: number) => {
+  const change = (delta: number) => {
     const next = Math.max(0, value + delta);
     setValue(next);
-    try { await bridge.resource(props.actorId, props.path, next); }
-    catch { setValue(props.value); }
+    void edit(props.path, next);
   };
 
   return (
     <div className="res">
       <div className="label">{props.label}</div>
       <div className="ctrl">
-        <button onClick={() => void change(-step)}>−</button>
+        <button onClick={() => change(-1)}>−</button>
         <div className="val grow" style={{ textAlign: "center" }}>
           {value}{props.max != null ? <span className="muted small"> / {props.max}</span> : null}
         </div>
-        <button onClick={() => void change(step)}>+</button>
+        <button onClick={() => change(1)}>+</button>
       </div>
       {props.max ? <div className="bar"><i style={{ width: `${Math.min(100, (value / props.max) * 100)}%` }} /></div> : null}
     </div>
   );
 }
 
-/* ----------------------------------------------------------------- skills */
+/* ------------------------------------------------------------------ skills */
 
-function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (target: RollTarget) => void }) {
+function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
   const t = useT();
+  const edit = useStore(s => s.edit);
   const [query, setQuery] = React.useState("");
-  const filter = (list: any[]) =>
-    list.filter(s => s.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const match = (list: any[]) => list.filter(x => x.name.toLowerCase().includes(query.trim().toLowerCase()));
 
-  const render = (title: string, list: any[]) => (
-    <Card title={title}>
-      {list.length ? list.map(skill => (
-        <button
+  const list = (title: string, skills: any[]) => (
+    <Section title={title}>
+      {skills.length ? skills.map(skill => (
+        <Row
           key={skill.id}
-          className="rowitem"
-          onClick={() => onRoll({
+          name={skill.name}
+          sub={`${skill.characteristicLabel || skill.characteristic.toUpperCase()} · +${skill.advances}`}
+          detail={skill}
+          onTap={() => onRoll({
             actorId: sheet.id, kind: "skill", key: skill.id, name: skill.name,
-            subtitle: `${skill.characteristicLabel || skill.characteristic.toUpperCase()} · ${skill.advances} adv`
+            subtitle: `${skill.characteristicLabel || skill.characteristic.toUpperCase()} ${skill.total}`
           })}
-        >
-          <span className="name">
-            {skill.name}
-            <span className="sub">{skill.characteristicLabel || skill.characteristic.toUpperCase()} · +{skill.advances}</span>
-          </span>
-          <span className="num">{skill.total}</span>
-        </button>
+          right={
+            <>
+              <NumEdit value={skill.advances} width={46} onCommit={v => void edit("system.advances.value", v, skill.id)} />
+              <span className="num">{skill.total}</span>
+            </>
+          }
+        />
       )) : <Empty text={t("sheet.noSkills")} />}
-    </Card>
+    </Section>
   );
 
   return (
     <>
-      <input
-        placeholder="🔍"
-        value={query}
-        onChange={event => setQuery(event.target.value)}
-        style={{ marginBottom: "0.6rem" }}
-      />
-      {render(t("sheet.basicSkills"), filter(sheet.skills?.basic ?? []))}
-      {render(t("sheet.advancedSkills"), filter(sheet.skills?.advanced ?? []))}
+      <input placeholder={t("sheet.search")} value={query} onChange={e => setQuery(e.target.value)} style={{ marginBottom: "0.6rem" }} />
+      {sheet.extendedTests?.length ? (
+        <Section title={t("sheet.extendedTests")}>
+          {sheet.extendedTests.map((x: any) => (
+            <Row
+              key={x.id}
+              name={x.name}
+              sub={x.test}
+              detail={x}
+              onTap={() => onRoll({ actorId: sheet.id, kind: "extended", key: x.id, name: x.name })}
+              right={<Step value={`${x.current}/${x.target}`} onStep={d => void edit("system.SL.current", d, x.id, "step")} />}
+            />
+          ))}
+        </Section>
+      ) : null}
+      {list(t("sheet.basicSkills"), match(sheet.skills?.basic ?? []))}
+      {list(t("sheet.advancedSkills"), match(sheet.skills?.advanced ?? []))}
     </>
   );
 }
 
-/* ----------------------------------------------------------------- combat */
+/* ----------------------------------------------------------------- talents */
 
-function CombatTab({ sheet, onRoll }: { sheet: any; onRoll: (target: RollTarget) => void }) {
+function TalentsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
   const t = useT();
+  const edit = useStore(s => s.edit);
   return (
     <>
-      <Card title={t("sheet.weapons")}>
-        {(sheet.weapons ?? []).length ? sheet.weapons.map((w: any) => (
-          <button
-            key={w.id}
-            className="rowitem"
-            onClick={() => onRoll({
-              actorId: sheet.id, kind: "weapon", key: w.id, name: w.name,
-              subtitle: [w.groupLabel, w.damage ? `${t("sheet.damage")} ${w.damage}` : "", w.reach].filter(Boolean).join(" · "),
-              actionLabel: t("roll.attack")
-            })}
-          >
-            {w.img ? <img src={imgUrl(w.img)} alt="" /> : null}
-            <span className="name">
-              {w.name}
-              <span className="sub">
-                {[w.groupLabel, w.damage ? `${t("sheet.damage")} ${w.damage}` : "", w.reach || w.range].filter(Boolean).join(" · ")}
-                {w.qualities?.length ? ` · ${w.qualities.join(", ")}` : ""}
-              </span>
-            </span>
-            {w.equipped ? <span className="num">⚔</span> : null}
-          </button>
+      <Section title={t("sheet.traits")}>
+        {(sheet.traits ?? []).length ? sheet.traits.map((x: any) => (
+          <Row
+            key={x.id}
+            img={x.img}
+            name={x.name}
+            sub={x.specification}
+            detail={x}
+            onTap={x.rollable ? () => onRoll({ actorId: sheet.id, kind: "trait", key: x.id, name: x.name }) : undefined}
+            right={<Check on={!x.disabled} label={t("sheet.equipped")} onToggle={() => void edit("system.disabled", null, x.id, "toggle")} />}
+          />
         )) : <Empty text={t("sheet.empty")} />}
+      </Section>
+
+      <Section title={t("sheet.tab.talents")}>
+        {(sheet.talents ?? []).length ? sheet.talents.map((x: any) => (
+          <Row key={x.id} img={x.img} name={x.name} sub={x.tests} detail={x} right={<span className="num">{x.advances}{x.max ? ` / ${x.max}` : ""}</span>} />
+        )) : <Empty text={t("sheet.empty")} />}
+      </Section>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ combat */
+
+function CombatTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
+  const t = useT();
+  const edit = useStore(s => s.edit);
+  const weapons: any[] = sheet.weapons ?? [];
+  const armour = sheet.status?.armour ?? { locations: [] };
+
+  const weaponRow = (w: any) => (
+    <Row
+      key={w.id}
+      img={w.img}
+      name={w.name}
+      sub={[w.groupLabel, w.damage ? `${t("sheet.damage")} ${w.damage}` : "", w.melee ? w.reach : w.range,
+        w.qualities?.length ? w.qualities.join(", ") : ""].filter(Boolean).join(" · ")}
+      detail={w}
+      onTap={() => onRoll({ actorId: sheet.id, kind: "weapon", key: w.id, name: w.name, actionLabel: t("roll.attack") })}
+      right={<Check on={w.equipped} label={t("sheet.equipped")} onToggle={() => void edit("system.equipped.value", null, w.id, "toggle")} />}
+    />
+  );
+
+  const melee = weapons.filter(w => w.melee && w.equipped);
+  const ranged = weapons.filter(w => w.ranged && w.equipped);
+  const spare = weapons.filter(w => !w.equipped);
+
+  return (
+    <>
+      <Card>
+        <div className="row spread">
+          <b>{t("sheet.advantage")}</b>
+          <Step value={sheet.status?.advantage?.value ?? 0} onStep={d => void edit("system.status.advantage.value", d, undefined, "step")} />
+        </div>
       </Card>
 
-      <Card title={t("sheet.traits")}>
-        {(sheet.traits ?? []).filter((x: any) => x.rollable).length
-          ? sheet.traits.filter((x: any) => x.rollable).map((x: any) => (
-            <button
-              key={x.id}
-              className="rowitem"
-              onClick={() => onRoll({ actorId: sheet.id, kind: "trait", key: x.id, name: x.name, subtitle: x.specification })}
-            >
-              <span className="name">{x.name}<span className="sub">{x.specification}</span></span>
-            </button>
-          ))
-          : <Empty text={t("sheet.empty")} />}
-      </Card>
+      <Section title={t("sheet.melee")}>
+        {melee.length ? melee.map(weaponRow) : <Empty text={t("sheet.empty")} />}
+      </Section>
 
-      <Card title={t("sheet.armourItems")}>
-        {(sheet.armourItems ?? []).length ? sheet.armourItems.map((a: any) => (
-          <div key={a.id} className="rowitem">
-            {a.img ? <img src={imgUrl(a.img)} alt="" /> : null}
-            <span className="name">{a.name}<span className="sub">{[a.type, a.penalty, ...(a.qualities ?? [])].filter(Boolean).join(" · ")}</span></span>
-            {a.worn ? <span className="num">🛡</span> : null}
+      <Section title={t("sheet.ranged")}>
+        {ranged.length ? ranged.map(w => (
+          <div key={w.id}>
+            {weaponRow(w)}
+            {w.ammoList?.length || w.loading ? (
+              <div className="row small" style={{ gap: "0.4rem", margin: "-0.2rem 0 0.5rem" }}>
+                <span className="muted">{t("sheet.ammo")}</span>
+                <select className="grow" value={w.currentAmmo} onChange={e => void edit("system.currentAmmo.value", e.target.value, w.id)}>
+                  <option value="">—</option>
+                  {(w.ammoList ?? []).map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                {w.loading ? (
+                  w.loaded.max > 1
+                    ? <Step value={`${w.loaded.amt}/${w.loaded.max}`} onStep={d => void edit("system.loaded.amt", d, w.id, "step")} />
+                    : <Check on={w.loaded.value} label={t("sheet.loaded")} onToggle={() => void edit("system.loaded.value", null, w.id, "toggle")} />
+                ) : null}
+              </div>
+            ) : null}
           </div>
         )) : <Empty text={t("sheet.empty")} />}
-      </Card>
+      </Section>
 
-      {sheet.ailments?.length ? (
-        <Card title={t("sheet.ailments")}>
-          {sheet.ailments.map((x: any) => (
-            <div key={x.id} className="rowitem">
-              <span className="name">{x.name}<span className="sub">{x.kind}</span></span>
+      <Section title={t("sheet.armour")} right={armour.shield ? <span className="small muted">{t("sheet.shield")} {armour.shield}</span> : undefined}>
+        <div className="aplist">
+          {(armour.locations ?? []).map((l: any) => (
+            <div key={l.key} className="res">
+              <div className="label">{l.label}</div>
+              <div className="val">{l.value}</div>
             </div>
           ))}
-        </Card>
+        </div>
+        {(sheet.armourItems ?? []).length ? (
+          <div style={{ marginTop: "0.6rem" }}>
+            {sheet.armourItems.map((a: any) => (
+              <Row
+                key={a.id}
+                img={a.img}
+                name={a.name}
+                sub={[a.type, a.penalty, ...(a.qualities ?? [])].filter(Boolean).join(" · ")}
+                detail={a}
+                right={<Check on={a.equipped} label={t("sheet.equipped")} onToggle={() => void edit("system.equipped.value", null, a.id, "toggle")} />}
+              />
+            ))}
+          </div>
+        ) : null}
+      </Section>
+
+      <Section title={t("sheet.notEquipped")}>
+        {spare.length ? spare.map(weaponRow) : <Empty text={t("sheet.empty")} />}
+      </Section>
+    </>
+  );
+}
+
+/* ----------------------------------------------------------------- effects */
+
+function EffectsTab({ sheet }: { sheet: any }) {
+  const t = useT();
+  const toggleCondition = useStore(s => s.toggleCondition);
+  const edit = useStore(s => s.edit);
+
+  const effectSection = (title: string, list: any[]) => (
+    list.length ? (
+      <Section title={title}>
+        {list.map(e => (
+          <Row key={e.id} img={e.img} name={e.name} sub={e.source} detail={{ description: e.description }} />
+        ))}
+      </Section>
+    ) : null
+  );
+
+  const kinds = ["critical", "injury", "disease", "psychology", "mutation"];
+
+  return (
+    <>
+      <Section title={t("sheet.conditions")}>
+        <div className="condgrid">
+          {(sheet.conditions ?? []).map((c: any) => (
+            <div key={c.key} className={`cond ${c.active ? "on" : ""}`}>
+              <span className="grow">{c.name}</span>
+              {c.numbered
+                ? <Step value={c.value} onStep={d => void toggleCondition(c.key, d < 0)} />
+                : <Check on={c.active} onToggle={() => void toggleCondition(c.key, c.active)} />}
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {effectSection(t("sheet.temporary"), sheet.effects?.temporary ?? [])}
+      {effectSection(t("sheet.passive"), sheet.effects?.passive ?? [])}
+      {effectSection(t("sheet.disabledEffects"), sheet.effects?.disabled ?? [])}
+
+      {kinds.map(kind => {
+        const list = (sheet.ailments ?? []).filter((a: any) => a.kind === kind);
+        if (!list.length) return null;
+        return (
+          <Section key={kind} title={t(`sheet.kind.${kind}`)}>
+            {list.map((a: any) => (
+              <Row
+                key={a.id}
+                img={a.img}
+                name={a.name}
+                sub={[a.location, a.duration, a.incubation].filter(Boolean).join(" · ")}
+                detail={a}
+                right={a.kind === "injury" && a.duration
+                  ? <Step value={a.duration} onStep={d => void edit("system.duration.value", d, a.id, "step")} />
+                  : undefined}
+              />
+            ))}
+          </Section>
+        );
+      })}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------- magic */
+
+function MagicTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
+  const t = useT();
+  const edit = useStore(s => s.edit);
+
+  const spellRow = (x: any, lore: boolean) => (
+    <div key={x.id}>
+      <Row
+        img={x.img}
+        name={x.name}
+        sub={[lore ? `${t("sheet.cn")} ${x.cn}` : "", x.range, x.target, x.duration, x.damage ? `${t("sheet.damage")} ${x.damage}` : ""]
+          .filter(Boolean).join(" · ")}
+        detail={x}
+        onTap={() => onRoll({ actorId: sheet.id, kind: "cast", key: x.id, name: x.name, actionLabel: t("roll.cast") })}
+        right={
+          <>
+            {lore ? <Check on={x.memorized} label={t("sheet.memorized")} onToggle={() => void edit("system.memorized.value", null, x.id, "toggle")} /> : null}
+            <button className="btn ghost" onClick={() => onRoll({ actorId: sheet.id, kind: "channel", key: x.id, name: x.name, actionLabel: t("roll.channel") })}>≈</button>
+          </>
+        }
+      />
+      {lore ? (
+        <div className="row small" style={{ gap: "0.5rem", margin: "-0.2rem 0 0.5rem" }}>
+          <span className="muted">{t("sheet.channelled")}</span>
+          <Step value={`${x.channelled}/${x.cn}`} onStep={d => void edit("system.cn.SL", d, x.id, "step")} />
+          {x.ingredients?.length ? (
+            <select className="grow" value={x.currentIng} onChange={e => void edit("system.currentIng.value", e.target.value, x.id)}>
+              <option value="">{t("sheet.ingredient")}: —</option>
+              {x.ingredients.map((i: any) => <option key={i.id} value={i.id}>{i.name}</option>)}
+            </select>
+          ) : null}
+        </div>
+      ) : null}
+      {x.lores?.length > 1 ? (
+        <div className="chips" style={{ marginTop: "-0.2rem" }}>
+          {x.lores.map((l: any) => (
+            <button key={l.key} className={`chip ${x.chosenLore === l.key ? "active" : ""}`} onClick={() => void edit("system.lore.chosen", l.key, x.id)}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <>
+      <Section title={t("sheet.petty")}>
+        {(sheet.spells?.petty ?? []).length ? sheet.spells.petty.map((x: any) => spellRow(x, false)) : <Empty text={t("sheet.empty")} />}
+      </Section>
+      <Section title={t("sheet.loreSpells")}>
+        {(sheet.spells?.lore ?? []).length ? sheet.spells.lore.map((x: any) => spellRow(x, true)) : <Empty text={t("sheet.empty")} />}
+      </Section>
+    </>
+  );
+}
+
+/* ---------------------------------------------------------------- religion */
+
+function ReligionTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => void }) {
+  const t = useT();
+  const edit = useStore(s => s.edit);
+
+  const prayerRow = (x: any) => (
+    <Row
+      key={x.id}
+      img={x.img}
+      name={x.name}
+      sub={[x.god, x.range, x.target, x.duration, x.damage ? `${t("sheet.damage")} ${x.damage}` : ""].filter(Boolean).join(" · ")}
+      detail={x}
+      onTap={() => onRoll({ actorId: sheet.id, kind: "prayer", key: x.id, name: x.name })}
+    />
+  );
+
+  return (
+    <>
+      <Card>
+        <label className="field">
+          <span>{t("sheet.god")}</span>
+          <TextEdit value={sheet.details?.god ?? ""} onCommit={v => void edit("system.details.god.value", v)} />
+        </label>
+        <div className="row spread">
+          <b>{t("sheet.sin")}</b>
+          <Step value={sheet.status?.sin?.value ?? 0} onStep={d => void edit("system.status.sin.value", d, undefined, "step")} />
+        </div>
+      </Card>
+
+      <Section title={t("sheet.blessings")}>
+        {(sheet.prayers?.blessing ?? []).length ? sheet.prayers.blessing.map(prayerRow) : <Empty text={t("sheet.empty")} />}
+      </Section>
+      <Section title={t("sheet.miracles")}>
+        {(sheet.prayers?.miracle ?? []).length ? sheet.prayers.miracle.map(prayerRow) : <Empty text={t("sheet.empty")} />}
+      </Section>
+    </>
+  );
+}
+
+/* --------------------------------------------------------------- trappings */
+
+function TrappingsTab({ sheet }: { sheet: any }) {
+  const t = useT();
+  const edit = useStore(s => s.edit);
+  const inv = sheet.inventory ?? { categories: [], containers: [], money: { items: [] } };
+  const enc = sheet.status?.encumbrance ?? { current: 0, max: 0, state: 0 };
+  const stateKey = enc.state > 3 ? 3 : enc.state > 2 ? 2 : enc.state > 1 ? 1 : 0;
+
+  const itemRow = (item: any, toggle: boolean) => (
+    <Row
+      key={item.id}
+      img={item.img}
+      name={item.name}
+      sub={`${t("sheet.enc")} ${item.encumbrance}`}
+      detail={item}
+      right={
+        <>
+          {toggle ? <Check on={item.equipped} label={t("sheet.equipped")} onToggle={() => void edit("system.equipped.value", null, item.id, "toggle")} /> : null}
+          <Step value={item.quantity} onStep={d => void edit("system.quantity.value", d, item.id, "step")} />
+        </>
+      }
+    />
+  );
+
+  return (
+    <>
+      <Card>
+        <div className="row spread">
+          <b>{t("sheet.encumbrance")}</b>
+          <span>{enc.current} / {enc.max}</span>
+        </div>
+        <div className="bar" style={{ marginTop: "0.3rem" }}>
+          <i style={{ width: `${Math.min(100, enc.max ? (enc.current / enc.max) * 100 : 0)}%` }} />
+        </div>
+        <div className="small muted" style={{ marginTop: "0.25rem" }}>{t(`sheet.enc${stateKey}`)}</div>
+      </Card>
+
+      <Section title={t("sheet.money")} right={<span className="small muted">{t("sheet.total")}: {inv.money?.total ?? 0}d</span>}>
+        {(inv.money?.items ?? []).length ? inv.money.items.map((m: any) => itemRow(m, false)) : <Empty text={t("sheet.empty")} />}
+      </Section>
+
+      {(inv.categories ?? []).map((cat: any) => (
+        <Section key={cat.key} title={cat.label}>
+          {cat.items.length ? cat.items.map((item: any) => itemRow(item, cat.toggle)) : <Empty text={t("sheet.empty")} />}
+        </Section>
+      ))}
+
+      {(inv.containers ?? []).length ? (
+        <Section title={t("sheet.containers")}>
+          {inv.containers.map((c: any) => (
+            <div key={c.id}>
+              <Row
+                img={c.img}
+                name={c.name}
+                sub={`${c.carries.current} / ${c.carries.max}`}
+                right={c.wearable ? <Check on={c.equipped} onToggle={() => void edit("system.equipped.value", null, c.id, "toggle")} /> : undefined}
+              />
+              <div style={{ paddingLeft: "1rem" }}>
+                {c.contents.map((item: any) => itemRow(item, false))}
+              </div>
+            </div>
+          ))}
+        </Section>
       ) : null}
     </>
   );
 }
 
-/* ---------------------------------------------------------------- talents */
+/* ------------------------------------------------------------------- notes */
 
-function TalentsTab({ sheet }: { sheet: any }) {
+function NotesTab({ sheet }: { sheet: any }) {
   const t = useT();
-  const [open, setOpen] = React.useState<string | null>(null);
-  return (
-    <Card title={t("sheet.tab.talents")}>
-      {(sheet.talents ?? []).length ? sheet.talents.map((x: any) => (
-        <div key={x.id}>
-          <button className="rowitem" onClick={() => setOpen(open === x.id ? null : x.id)}>
-            <span className="name">{x.name}<span className="sub">{x.tests}</span></span>
-            <span className="num">{x.advances}</span>
-          </button>
-          {open === x.id && x.description ? (
-            <div className="card small"><Html html={x.description} /></div>
-          ) : null}
-        </div>
-      )) : <Empty text={t("sheet.empty")} />}
-    </Card>
-  );
-}
+  const edit = useStore(s => s.edit);
+  const d = sheet.details ?? {};
 
-/* ------------------------------------------------------------------ magic */
-
-function MagicTab({ sheet, onRoll }: { sheet: any; onRoll: (target: RollTarget) => void }) {
-  const t = useT();
   return (
     <>
-      <Card title={t("sheet.spells")}>
-        {(sheet.spells ?? []).length ? sheet.spells.map((x: any) => (
-          <div key={x.id} className="row" style={{ gap: "0.3rem", marginBottom: "0.35rem" }}>
-            <div className="rowitem grow" style={{ marginBottom: 0 }}>
-              <span className="name">{x.name}<span className="sub">{[x.lore, `${t("sheet.cn")} ${x.cn}`, x.range, x.duration].filter(Boolean).join(" · ")}</span></span>
+      <Card>
+        <label className="field">
+          <span>{t("sheet.motivation")}</span>
+          <TextEdit value={d.motivation ?? ""} onCommit={v => void edit("system.details.motivation.value", v)} />
+        </label>
+      </Card>
+
+      <Section title={t("sheet.ambitionsPersonal")}>
+        <label className="field">
+          <span>{t("sheet.shortTerm")}</span>
+          <TextEdit value={d.ambitions?.personalShort ?? ""} onCommit={v => void edit("system.details.personal-ambitions.short-term", v)} />
+        </label>
+        <label className="field" style={{ marginBottom: 0 }}>
+          <span>{t("sheet.longTerm")}</span>
+          <TextEdit value={d.ambitions?.personalLong ?? ""} onCommit={v => void edit("system.details.personal-ambitions.long-term", v)} />
+        </label>
+      </Section>
+
+      <Section title={t("sheet.ambitionsParty")}>
+        <label className="field">
+          <span>{t("sheet.shortTerm")}</span>
+          <TextEdit value={d.ambitions?.partyShort ?? ""} onCommit={v => void edit("system.details.party-ambitions.short-term", v)} />
+        </label>
+        <label className="field" style={{ marginBottom: 0 }}>
+          <span>{t("sheet.longTerm")}</span>
+          <TextEdit value={d.ambitions?.partyLong ?? ""} onCommit={v => void edit("system.details.party-ambitions.long-term", v)} />
+        </label>
+      </Section>
+
+      {d.biography ? (
+        <Section title={t("sheet.biography")}>
+          <div className="detail" style={{ margin: 0, borderRadius: 8, borderTop: "1px solid var(--line)" }}>
+            <Html html={d.biography} />
+          </div>
+        </Section>
+      ) : null}
+
+      {sheet.experienceLog?.length ? (
+        <Section title={t("sheet.expLog")}>
+          {sheet.experienceLog.map((entry: any, index: number) => (
+            <div key={index} className="kv">
+              <span>{entry.reason}</span>
+              <b>{entry.amount > 0 ? `+${entry.amount}` : entry.amount}</b>
             </div>
-            <button className="btn" onClick={() => onRoll({ actorId: sheet.id, kind: "cast", key: x.id, name: x.name, actionLabel: t("roll.cast") })}>✦</button>
-            <button className="btn ghost" onClick={() => onRoll({ actorId: sheet.id, kind: "channel", key: x.id, name: x.name, actionLabel: t("roll.channel") })}>≈</button>
-          </div>
-        )) : <Empty text={t("sheet.empty")} />}
-      </Card>
-
-      <Card title={t("sheet.prayers")}>
-        {(sheet.prayers ?? []).length ? sheet.prayers.map((x: any) => (
-          <button
-            key={x.id}
-            className="rowitem"
-            onClick={() => onRoll({ actorId: sheet.id, kind: "prayer", key: x.id, name: x.name })}
-          >
-            <span className="name">{x.name}<span className="sub">{[x.god, x.type, x.range].filter(Boolean).join(" · ")}</span></span>
-          </button>
-        )) : <Empty text={t("sheet.empty")} />}
-      </Card>
+          ))}
+        </Section>
+      ) : null}
     </>
   );
-}
-
-/* ------------------------------------------------------------------ items */
-
-function ItemsTab({ sheet }: { sheet: any }) {
-  const t = useT();
-  return (
-    <>
-      <Card title={t("sheet.money")}>
-        {(sheet.money ?? []).length ? sheet.money.map((m: any) => (
-          <div key={m.id} className="rowitem">
-            <span className="name">{m.name}</span>
-            <span className="num">{m.quantity}</span>
-          </div>
-        )) : <Empty text={t("sheet.empty")} />}
-      </Card>
-
-      <Card title={t("sheet.trappings")}>
-        {(sheet.trappings ?? []).length ? sheet.trappings.map((x: any) => (
-          <div key={x.id} className="rowitem">
-            {x.img ? <img src={imgUrl(x.img)} alt="" /> : null}
-            <span className="name">{x.name}<span className="sub">{t("sheet.enc")} {x.encumbrance}</span></span>
-            <span className="num">×{x.quantity}</span>
-          </div>
-        )) : <Empty text={t("sheet.empty")} />}
-      </Card>
-    </>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-
-function imgUrl(path: string): string {
-  if (!path) return "";
-  if (/^(https?:|data:)/i.test(path)) return path;
-  const base = useStore.getState().base;
-  return `${base}/${path.replace(/^\//, "")}`;
 }

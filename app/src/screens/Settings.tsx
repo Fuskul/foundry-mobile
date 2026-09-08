@@ -20,16 +20,27 @@ export function Settings() {
 
   return (
     <div>
-      <Card title={t("settings.language")}>
-        <select value={s.lang} onChange={event => s.setLang(event.target.value as any)}>
-          {LANGS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
-        </select>
+      <Card title={t("settings.appearance")}>
+        <label className="field">
+          <span>{t("settings.language")}</span>
+          <select value={s.lang} onChange={event => s.setLang(event.target.value as any)}>
+            {LANGS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
+        </label>
+        <label className="field" style={{ marginBottom: 0 }}>
+          <span>{t("settings.theme")}</span>
+          <select value={s.theme} onChange={event => s.setTheme(event.target.value as any)}>
+            <option value="dark">{t("settings.themeDark")}</option>
+            <option value="light">{t("settings.themeLight")}</option>
+            <option value="system">{t("settings.themeSystem")}</option>
+          </select>
+        </label>
       </Card>
 
       <Card title={t("settings.connection")}>
         <div className="small stack" style={{ gap: "0.2rem" }}>
           <div className="row spread"><span className="muted">{t("connect.server")}</span><b>{s.base}</b></div>
-          <div className="row spread"><span className="muted">{t("connect.world")}</span><b>{s.status.world ?? "—"}</b></div>
+          <div className="row spread"><span className="muted">{t("connect.world")}</span><b>{s.worldTitle || s.status.world || "—"}</b></div>
           <div className="row spread">
             <span className="muted">{t("settings.connection")}</span>
             <b style={{ color: s.connected ? "var(--green)" : "var(--blood)" }}>

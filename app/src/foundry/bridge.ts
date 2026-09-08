@@ -111,6 +111,22 @@ export class Bridge {
     return this.request<any>("roll", { actorId, kind, key, fields, skipDialog }, 30000);
   }
 
+  edit(actorId: string, path: string, value: unknown, itemId?: string, mode: "set" | "toggle" | "step" = "set") {
+    return this.request<any>("edit", { actorId, path, value, itemId, mode });
+  }
+
+  condition(actorId: string, key: string, remove = false) {
+    return this.request<any>("condition", { actorId, key, remove });
+  }
+
+  chatlog(since = 0, limit = 60) {
+    return this.request<any[]>("chatlog", { since, limit }, 20000);
+  }
+
+  cardAction(messageId: string, action: string, index = 0) {
+    return this.request<any>("cardAction", { messageId, action, index });
+  }
+
   chat(content: string, actorId?: string, rollMode = "publicroll") {
     return this.request<any>("chat", { content, actorId, rollMode });
   }

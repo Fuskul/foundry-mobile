@@ -1,4 +1,5 @@
 import React from "react";
+import { App as CapacitorApp } from "@capacitor/app";
 import { useStore } from "./store";
 import { useT } from "./ui/common";
 import { Connect } from "./screens/Connect";
@@ -19,6 +20,19 @@ export function App() {
   const s = useStore();
 
   React.useEffect(() => { void s.restore(); }, []);
+
+  // A sleeping phone misses everything the socket would have delivered, so the
+  // moment the app comes back we reopen the connection and refill the chat.
+  React.useEffect(() => {
+    const resync = () => { void useStore.getState().resync(); };
+    const onVisible = () => { if (document.visibilityState === "visible") resync(); };
+    document.addEventListener("visibilitychange", onVisible);
+    const handle = CapacitorApp.addListener("appStateChange", ({ isActive }) => { if (isActive) resync(); });
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      void handle.then(h => h.remove());
+    };
+  }, []);
 
   if (s.phase === "connect") {
     return (
