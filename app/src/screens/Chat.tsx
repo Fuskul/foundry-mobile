@@ -1,6 +1,6 @@
 import React from "react";
 import { useStore, conn, bridge } from "../store";
-import { useT, Html, Empty } from "../ui/common";
+import { useT, Html, Empty, useBackHandler } from "../ui/common";
 
 const PRESETS = ["1d4", "1d6", "1d8", "1d10", "1d12", "1d20", "1d100"];
 const MODES = ["publicroll", "gmroll", "blindroll", "selfroll"] as const;
@@ -21,6 +21,7 @@ export function Chat() {
   const [formula, setFormula] = React.useState("1d100");
   const [mode, setMode] = React.useState<string>("publicroll");
   const [zoom, setZoom] = React.useState<string | null>(null);
+  useBackHandler(!!zoom, () => { setZoom(null); return true; });
   const [opposed, setOpposed] = React.useState<Record<string, OpposedInfo | null>>({});
   const endRef = React.useRef<HTMLDivElement>(null);
 

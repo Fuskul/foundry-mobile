@@ -292,6 +292,12 @@ function registerChangeBroadcast() {
   for (const hook of ["createCombat", "updateCombat", "deleteCombat", "createCombatant", "updateCombatant", "deleteCombatant"]) {
     Hooks.on(hook, combatPing);
   }
+
+  // A message deleted on any client should vanish from the phones too.
+  Hooks.on("deleteChatMessage", message => {
+    if (game.settings.get(MODULE_ID, "executorMode") === EXECUTOR_MODE.NEVER) return;
+    game.socket.emit(SOCKET, { t: "evt", event: "chatDeleted", id: message.id });
+  });
 }
 
 /* -------------------------------------------------------------- scene button */

@@ -545,6 +545,12 @@ conn.on("bridge:actorChanged", (message: any) => {
   if (current && message?.actorIds?.includes(current)) scheduleRefresh();
 });
 
+conn.on("bridge:chatDeleted", (message: any) => {
+  const id = message?.id;
+  if (!id) return;
+  useStore.setState(s => ({ chat: s.chat.filter(m => m.id !== id) }));
+});
+
 conn.on("bridge:combatChanged", () => {
   if (useStore.getState().phase === "app") void useStore.getState().loadCombat();
 });

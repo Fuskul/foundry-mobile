@@ -11,6 +11,36 @@ export function useT() {
   );
 }
 
+/**
+ * A tiny stack of "escape" handlers for the Android back button. The newest
+ * open layer (a dialog, a lightbox, a non-default sheet tab) sits on top and
+ * gets the first chance to consume a back press; App runs runBack() before it
+ * decides to change tab or leave.
+ */
+const backStack: Array<() => boolean> = [];
+
+export function useBackHandler(active: boolean, handler: () => boolean) {
+  const ref = React.useRef(handler);
+  ref.current = handler;
+  React.useEffect(() => {
+    if (!active) return;
+    const fn = () => ref.current();
+    backStack.push(fn);
+    return () => {
+      const i = backStack.indexOf(fn);
+      if (i >= 0) backStack.splice(i, 1);
+    };
+  }, [active]);
+}
+
+/** Give the topmost open layer a chance to handle back. Returns true if one did. */
+export function runBack(): boolean {
+  for (let i = backStack.length - 1; i >= 0; i--) {
+    try { if (backStack[i]()) return true; } catch { /* keep going */ }
+  }
+  return false;
+}
+
 export function Field(props: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="field">
@@ -31,6 +61,7 @@ export function Card(props: { title?: string; children: React.ReactNode }) {
 }
 
 export function Modal(props: { open: boolean; title?: string; onClose: () => void; children: React.ReactNode }) {
+  useBackHandler(props.open, () => { props.onClose(); return true; });
   if (!props.open) return null;
   return (
     <div className="backdrop" onClick={props.onClose}>

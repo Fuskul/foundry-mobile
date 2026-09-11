@@ -1,7 +1,7 @@
 import React from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useStore } from "./store";
-import { useT, useSwipe, usePullToRefresh, mergeTouch } from "./ui/common";
+import { useT, useSwipe, usePullToRefresh, mergeTouch, runBack } from "./ui/common";
 import { Connect } from "./screens/Connect";
 import { Character } from "./screens/Character";
 import { Chat } from "./screens/Chat";
@@ -55,13 +55,17 @@ export function App() {
   // first tab.
   React.useEffect(() => {
     const handle = CapacitorApp.addListener("backButton", () => {
+      // First let any open layer (dialog, lightbox, a non-default sheet tab) take it.
+      if (runBack()) return;
       const st = useStore.getState();
       if (st.phase === "app" && st.tab !== TABS[0].id) {
         const index = TABS.findIndex(tab => tab.id === st.tab);
         st.setTab(TABS[Math.max(0, index - 1)].id);
         return;
       }
-      CapacitorApp.minimizeApp?.() ?? CapacitorApp.exitApp();
+      // Nothing left to step back to: send the app to the background (standard
+      // Android behaviour from the home screen), never a hard exit.
+      CapacitorApp.minimizeApp?.();
     });
     return () => { void handle.then(h => h.remove()); };
   }, []);

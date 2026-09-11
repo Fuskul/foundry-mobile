@@ -1,5 +1,5 @@
 import React from "react";
-import { Html, useT, Modal } from "./common";
+import { Html, useT, Modal, useBackHandler } from "./common";
 import { useStore } from "../store";
 import { assetUrl } from "../foundry/http";
 
@@ -131,6 +131,7 @@ export function useSheetLabels(sheet: any) {
 
 /** Full-screen image viewer. */
 export function Lightbox({ src, onClose }: { src: string | null; onClose: () => void }) {
+  useBackHandler(!!src, () => { onClose(); return true; });
   if (!src) return null;
   return (
     <div className="lightbox" onClick={onClose}>

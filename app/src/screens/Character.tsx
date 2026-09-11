@@ -1,6 +1,6 @@
 import React from "react";
 import { useStore, bridge } from "../store";
-import { useT, Card, Empty, Html, useSwipe } from "../ui/common";
+import { useT, Card, Empty, Html, useSwipe, useBackHandler } from "../ui/common";
 import { Section, Row, NumEdit, Step, Check, TextEdit, imgUrl, useSheetLabels, Lightbox, Advance, AdvanceEdit } from "../ui/sheet";
 import { RollDialog, type RollTarget } from "../ui/RollDialog";
 
@@ -18,6 +18,10 @@ export function Character() {
   const tabs = ALL_TABS.filter(id =>
     (id !== "magic" || sheet?.hasSpells) && (id !== "religion" || sheet?.hasPrayers));
   const active = tabs.includes(tab) ? tab : "main";
+
+  // Back on a non-main sheet tab returns to "main" (the sheet's own home)
+  // before the app-level back leaves the screen.
+  useBackHandler(active !== "main", () => { setTab("main"); return true; });
 
   // A sideways flick walks the sheet's own tabs before the app-level tabs see it.
   const stepTab = (delta: number) => {
@@ -272,6 +276,7 @@ function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
 
   const list = (title: string, skills: any[]) => (
     <Section title={title}>
+      <div className="skillgrid">
       {skills.length ? skills.map(skill => (
         <Row
           key={skill.id}
@@ -298,6 +303,7 @@ function SkillsTab({ sheet, onRoll }: { sheet: any; onRoll: (t: RollTarget) => v
           }
         />
       )) : <Empty text={t("sheet.noSkills")} />}
+      </div>
     </Section>
   );
 

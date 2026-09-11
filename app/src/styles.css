@@ -543,3 +543,6 @@ input.numedit {
 .track .pill { font-size: 0.72rem; color: var(--ink-dim); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.5rem; }
 
 .notice.stale { border-left: 3px solid var(--gold); }
+
+/* Skills flow into columns when there is width for them (tablet), one per row on a phone */
+.skillgrid { display: grid; gap: 0 0.7rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
