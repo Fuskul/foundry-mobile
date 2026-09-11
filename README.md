@@ -99,6 +99,18 @@ handshake — Foundry 14 authenticates the socket by cookie alone.
 GM settings: the bridge can be switched off entirely, and editing and rolling can be
 disabled separately.
 
+## In-client mode — no GM, no separate connection (preview)
+
+Open the world in a phone browser with `?fvttmobile=1` on the address, e.g.
+`https://your-server/game?fvttmobile=1`, and log in as your player. The module
+then hides Foundry's own interface and mounts the mobile app **inside your own
+client**: rolls and sheet maths run locally, so the world only has to be
+*running* — no GM online, no host, no extra profile. The board canvas is paused
+and skipped to keep a phone light.
+
+This is a preview and runs behind the flag; the normal app (a thin remote that
+uses the bridge) is unchanged and still there.
+
 ## Use it without installing an app
 
 Open the address from the QR code on your phone. It is the same interface, running in the

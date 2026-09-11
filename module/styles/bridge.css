@@ -7,3 +7,17 @@
 .fvttmb-connect .fvttmb-row input { flex: 1 1 auto; font-family: monospace; font-size: 0.8rem; }
 .fvttmb-connect .fvttmb-row button { flex: 0 0 2.2rem; }
 .fvttmb-connect .fvttmb-note { font-size: 0.8rem; opacity: 0.75; margin: 0.35rem 0 0; }
+
+/* In-client mobile embed: our full-screen host sits over Foundry, which we
+   pause and hide so a phone renders only the app. */
+html.fvttmobile-embed, html.fvttmobile-embed body { overflow: hidden; }
+#fvttmobile-host {
+  all: initial;
+  position: fixed; inset: 0; z-index: 100000;
+  background: #14120f;
+}
+html.fvttmobile-embed #interface,
+html.fvttmobile-embed #board,
+html.fvttmobile-embed #pause,
+html.fvttmobile-embed #logo,
+html.fvttmobile-embed .notification-pip { display: none !important; }

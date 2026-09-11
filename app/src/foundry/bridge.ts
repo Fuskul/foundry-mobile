@@ -72,6 +72,8 @@ export class Bridge {
    * which lets every eligible client respond (the first answer wins).
    */
   async request<T = any>(action: string, payload: Record<string, unknown> = {}, timeoutMs = 12000): Promise<T> {
+    // In-client mode: no socket, no host — call the module's handler in-process.
+    if (this.conn.local) return this.conn.local(action, payload) as Promise<T>;
     try {
       return await this.send<T>(action, payload, timeoutMs, undefined);
     } catch (err) {

@@ -36,6 +36,8 @@ export class FoundryConnection {
   activeUsers: string[] = [];
   world: any = null;
   logs: LogLine[] = [];
+  /** When set, the app runs *inside* a Foundry client and calls handlers in-process. */
+  local: ((action: string, payload: any) => Promise<any>) | null = null;
 
   private listeners = new Map<string, Set<Listener>>();
 
@@ -362,7 +364,7 @@ export class FoundryConnection {
     this.log("info", "socket closed");
   }
 
-  get connected() { return !!this.socket?.connected; }
+  get connected() { return this.local ? true : !!this.socket?.connected; }
   get me() { return this.world?.users?.find((u: any) => u._id === this.userId) ?? null; }
 }
 

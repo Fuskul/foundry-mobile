@@ -3,6 +3,7 @@ import { debug, info, warn, error, setVerbose } from "./log.js";
 import { shouldHandle, requesterOf } from "./executor.js";
 import { HANDLERS } from "./api.js";
 import { renderConnectDialog } from "./ui.js";
+import "./mobile.js"; // in-client (?fvttmobile=1) embed
 
 /* ------------------------------------------------------------------ settings */
 

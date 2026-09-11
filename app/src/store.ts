@@ -107,6 +107,7 @@ interface State {
   setField: <K extends keyof State>(key: K, value: State[K]) => void;
 
   restore: () => Promise<void>;
+  enterLocal: (seedChat: any[]) => Promise<void>;
   forgetServer: (base: string) => void;
   addServer: (url: string, name: string) => void;
   renameServer: (url: string, name: string) => void;
@@ -251,6 +252,7 @@ export const useStore = create<State>((set, get) => ({
   /** Catch up after the phone was asleep: reconnect if needed, then refill chat. */
   async resync() {
     if (get().phase !== "app") return;
+    if (conn.local) { await get().refreshSheet(); return; }
     try {
       if (!conn.connected) {
         conn.log("info", "waking up: reopening the connection");
@@ -273,8 +275,15 @@ export const useStore = create<State>((set, get) => ({
   async restore() {
     try {
       const { value } = await Preferences.get({ key: KEY });
+      const saved = value ? JSON.parse(value) : {};
+      // Embedded in a Foundry client: only personal prefs matter, the rest of
+      // the connect flow is skipped (enterLocal drives the app).
+      if (conn.local) {
+        set({ lang: saved.lang ?? detectLang(), theme: saved.theme ?? "dark" });
+        applyTheme(saved.theme ?? "dark");
+        return;
+      }
       if (!value) return;
-      const saved = JSON.parse(value);
       set({
         lang: saved.lang ?? detectLang(),
         theme: saved.theme ?? "dark",
@@ -289,6 +298,23 @@ export const useStore = create<State>((set, get) => ({
       void get().checkServers();
       if (defaultBase()) void get().probe(defaultBase());
     } catch { /* first run */ }
+  },
+
+  /** Come up already connected, as the client we live inside. */
+  async enterLocal(seedChat) {
+    const entries = (seedChat ?? []).map(toEntry).filter(Boolean) as ChatEntry[];
+    set({
+      phase: "app",
+      connected: true,
+      base: conn.base,
+      userId: conn.userId,
+      username: conn.userName || "",
+      chat: mergeChat([], entries)
+    });
+    void get().checkBridge();
+    void get().loadActors();
+    void get().loadModules();
+    void get().loadCombat();
   },
 
   forgetServer(base) {
