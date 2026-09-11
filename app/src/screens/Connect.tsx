@@ -170,6 +170,16 @@ export function Connect() {
           >
             {s.busy === "login" ? t("connect.loggingIn") : t("connect.login")}
           </button>
+
+          <div className="hr-or"><span>{t("connect.or")}</span></div>
+
+          <button
+            className="btn block"
+            onClick={() => { window.location.href = `${s.base.replace(/\/$/, "")}/game?fvttmobile=1`; }}
+          >
+            {t("connect.noGm")}
+          </button>
+          <div className="small muted" style={{ marginTop: "0.3rem" }}>{t("connect.noGmHint")}</div>
         </Card>
       ) : null}
 

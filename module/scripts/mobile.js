@@ -30,6 +30,22 @@ Hooks.once("ready", async () => {
 async function embedMobileApp() {
   document.documentElement.classList.add("fvttmobile-embed");
 
+  // The app sizes everything in rem (root font-size) and expects 16px, but
+  // Foundry — or a UI module like crlngn-ui with an interface-scale — can set a
+  // smaller root, which would shrink the whole app. Pin it; Foundry's own UI is
+  // hidden here anyway. Re-pin if something changes it later.
+  const pinRoot = () => {
+    // Guard against re-triggering our own observer (setting the value again
+    // still fires a mutation), which would loop.
+    if (document.documentElement.style.fontSize !== "16px") {
+      document.documentElement.style.setProperty("font-size", "16px", "important");
+    }
+  };
+  pinRoot();
+  try {
+    new MutationObserver(pinRoot).observe(document.documentElement, { attributes: true, attributeFilter: ["style", "class"] });
+  } catch { /* observer optional */ }
+
   // Stop the board from eating a phone's battery; it is never shown here.
   try { game.canvas?.app?.stop?.(); } catch { /* no canvas is fine */ }
   // Skip the canvas entirely on the next load (much lighter on a phone).

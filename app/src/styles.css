@@ -546,3 +546,7 @@ input.numedit {
 
 /* Skills flow into columns when there is width for them (tablet), one per row on a phone */
 .skillgrid { display: grid; gap: 0 0.7rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+
+/* "or" divider between the socket login and the in-client launcher */
+.hr-or { display: flex; align-items: center; gap: 0.6rem; color: var(--ink-dim); font-size: 0.8rem; margin: 0.7rem 0; }
+.hr-or::before, .hr-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }

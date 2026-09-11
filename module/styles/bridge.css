@@ -12,9 +12,15 @@
    pause and hide so a phone renders only the app. */
 html.fvttmobile-embed, html.fvttmobile-embed body { overflow: hidden; }
 #fvttmobile-host {
-  all: initial;
   position: fixed; inset: 0; z-index: 100000;
+  display: block; margin: 0; padding: 0;
   background: #14120f;
+  font-size: 16px; line-height: 1.45;
+}
+/* Some UI modules scale the whole page; the embed must not inherit that. */
+html.fvttmobile-embed, html.fvttmobile-embed body {
+  zoom: 1 !important; transform: none !important; filter: none !important;
+  font-size: 16px !important;
 }
 html.fvttmobile-embed #interface,
 html.fvttmobile-embed #board,

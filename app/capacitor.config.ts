@@ -10,7 +10,10 @@ const config: CapacitorConfig = {
   },
   server: {
     androidScheme: "http",
-    cleartext: true
+    cleartext: true,
+    // Let the app navigate its own WebView to any Foundry server for the
+    // in-client "no GM" mode (…/game?fvttmobile=1), instead of the OS browser.
+    allowNavigation: ["*"]
   },
   plugins: {
     // Native HTTP: requests leave the app instead of the WebView, so the
