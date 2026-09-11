@@ -11,6 +11,10 @@
 /* In-client mobile embed: our full-screen host sits over Foundry, which we
    pause and hide so a phone renders only the app. */
 html.fvttmobile-embed, html.fvttmobile-embed body { overflow: hidden; }
+/* Paint the ground dark from the first frame: the class is set before Foundry
+   builds its UI, so until the app mounts the phone shows this, not a half-drawn
+   Foundry. */
+html.fvttmobile-embed, html.fvttmobile-embed body { background: #14120f !important; }
 #fvttmobile-host {
   position: fixed; inset: 0; z-index: 100000;
   display: block; margin: 0; padding: 0;
@@ -22,8 +26,15 @@ html.fvttmobile-embed, html.fvttmobile-embed body {
   zoom: 1 !important; transform: none !important; filter: none !important;
   font-size: 16px !important;
 }
+/* Hide Foundry's whole interface, not a hand-listed subset: anything the client
+   or a UI module puts directly on <body> (hotbar, chat, sidebar, players, the
+   pause banner, tooltips, notifications) stays out. Only our host shows. */
+html.fvttmobile-embed body > *:not(#fvttmobile-host) { display: none !important; }
+/* Belt and braces for elements that are re-parented or sit outside <body>. */
 html.fvttmobile-embed #interface,
 html.fvttmobile-embed #board,
 html.fvttmobile-embed #pause,
 html.fvttmobile-embed #logo,
+html.fvttmobile-embed #tooltip,
+html.fvttmobile-embed #notifications,
 html.fvttmobile-embed .notification-pip { display: none !important; }

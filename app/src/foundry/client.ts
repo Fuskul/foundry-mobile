@@ -1,5 +1,5 @@
 import { io, Socket } from "socket.io-client";
-import { http, normaliseBase, isNative, readCookies } from "./http";
+import { http, normaliseBase, isNative, readCookies, writeCookie } from "./http";
 
 export interface JoinUser { id: string; name: string; role?: number }
 export interface ServerStatus {
@@ -243,6 +243,17 @@ export class FoundryConnection {
 
     this.userId = userId;
     this.userName = username;
+  }
+
+  /**
+   * Hand the logged-in session to the WebView's own cookie store, so a full-page
+   * navigation to `/game` (in-client mode) is already authenticated. In a normal
+   * browser the login response set the cookie already; this is for the native
+   * app, where the session otherwise stays in a jar the navigation cannot see.
+   */
+  async persistSessionCookie(): Promise<void> {
+    if (!isNative() || !this.session || !this.base) return;
+    await writeCookie(this.base, "session", this.session);
   }
 
   /* ---------------------------------------------------------------- socket */

@@ -96,6 +96,21 @@ export async function readCookies(url: string): Promise<Record<string, string>> 
 }
 
 /**
+ * Put a cookie into the store the WebView reads. After the app logs in over the
+ * native HTTP stack, the session lives in a jar the WebView's own navigation
+ * cannot see; writing it here means that when we then send the WebView to
+ * `/game`, it presents the session and Foundry lets it straight in instead of
+ * bouncing to the login page.
+ */
+export async function writeCookie(url: string, key: string, value: string): Promise<void> {
+  try {
+    await CapacitorCookies.setCookie({ url, key, value } as any);
+  } catch {
+    /* a normal browser sets its own cookie on login; nothing to do */
+  }
+}
+
+/**
  * Resolve an asset path from a Foundry chat card or sheet to a URL the phone
  * can actually load. Relative paths hang off the connected server, and — the
  * common breakage — an absolute URL the desktop stored pointing at localhost

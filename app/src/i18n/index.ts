@@ -46,7 +46,7 @@ const ru: Dict = {
   "connect.inGameHint": "Этот игрок уже онлайн. Войти за него нельзя, пока он не выйдет.",
   "connect.or": "или",
   "connect.noGm": "Войти без мастера (в клиенте)",
-  "connect.noGmHint": "Откроет мир прямо в приложении и посчитает всё сам — мастер в сети не нужен. Войдите на странице Foundry как ваш игрок. Превью, грузится тяжелее.",
+  "connect.noGmHint": "Выберите пользователя выше и нажмите здесь: приложение само войдёт и откроет мир прямо внутри себя, посчитав всё локально — мастер в сети не нужен. Превью, грузится тяжелее.",
 
   "nav.character": "Персонаж",
   "nav.dice": "Кубы",
@@ -307,7 +307,7 @@ const en: Dict = {
   "connect.inGameHint": "This player is already online. You cannot log in as them until they leave.",
   "connect.or": "or",
   "connect.noGm": "Enter without a GM (in-client)",
-  "connect.noGmHint": "Opens the world right inside the app and computes everything itself — no GM online needed. Log in on the Foundry page as your player. Preview; heavier to load.",
+  "connect.noGmHint": "Pick a user above and tap here: the app logs in itself and opens the world right inside it, computing everything locally — no GM online needed. Preview; heavier to load.",
 
   "nav.character": "Character",
   "nav.dice": "Dice",

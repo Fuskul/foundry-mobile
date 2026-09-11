@@ -18,6 +18,15 @@ function mobileRequested() {
   }
 }
 
+// Mark the page for the embed as early as this module is evaluated — well before
+// Foundry finishes building its own interface. The stylesheet then keeps that
+// interface hidden throughout the load, so the phone shows a plain dark screen
+// instead of watching Foundry's panels assemble and "slide to the top" before we
+// cover them at `ready`.
+if (mobileRequested()) {
+  try { document.documentElement.classList.add("fvttmobile-embed"); } catch { /* pre-DOM is fine */ }
+}
+
 Hooks.once("ready", async () => {
   if (!mobileRequested()) return;
   try {

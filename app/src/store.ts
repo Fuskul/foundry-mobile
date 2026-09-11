@@ -114,6 +114,7 @@ interface State {
   checkServers: () => Promise<void>;
   probe: (base: string) => Promise<void>;
   login: () => Promise<void>;
+  enterInClient: () => Promise<void>;
   logout: () => Promise<void>;
   checkBridge: () => Promise<void>;
   loadActors: (scope?: "mine" | "characters") => Promise<void>;
@@ -403,6 +404,30 @@ export const useStore = create<State>((set, get) => ({
       void get().loadActors();
       void get().loadModules();
       void get().loadCombat();
+    } catch (err) {
+      set({ busy: null, error: (err as Error).message });
+    }
+  },
+
+  /**
+   * No-GM ("in-client") entry. Instead of leaving the player on Foundry's own
+   * login page — which is drawn by Foundry's JavaScript and often never finishes
+   * appearing on a phone — the app performs the /join itself and only then sends
+   * the browser into the world with the embed flag, already authenticated.
+   */
+  async enterInClient() {
+    const { userId, users, password } = get();
+    if (!userId) return;
+    const name = users.find(u => u.id === userId)?.name ?? get().username;
+    set({ busy: "inclient", error: null });
+    try {
+      await conn.login(userId, name, password);
+      await conn.persistSessionCookie();
+      set({ username: name });
+      await persist(get());
+      const url = `${get().base.replace(/\/$/, "")}/game?fvttmobile=1`;
+      conn.log("info", `entering in-client mode at ${url}`);
+      window.location.href = url;
     } catch (err) {
       set({ busy: null, error: (err as Error).message });
     }

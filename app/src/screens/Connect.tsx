@@ -175,9 +175,10 @@ export function Connect() {
 
           <button
             className="btn block"
-            onClick={() => { window.location.href = `${s.base.replace(/\/$/, "")}/game?fvttmobile=1`; }}
+            disabled={!s.userId || s.busy === "inclient" || s.activeUsers.includes(s.userId)}
+            onClick={() => void s.enterInClient()}
           >
-            {t("connect.noGm")}
+            {s.busy === "inclient" ? t("connect.loggingIn") : t("connect.noGm")}
           </button>
           <div className="small muted" style={{ marginTop: "0.3rem" }}>{t("connect.noGmHint")}</div>
         </Card>
